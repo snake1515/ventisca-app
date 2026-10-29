@@ -1,6 +1,6 @@
 # Ventisca
 
-App web para **empresas de mantenimiento de aires acondicionados**: agenda de visitas, órdenes de servicio, plan de mantenimiento preventivo con **alertas automáticas**, clientes y sus equipos, garantías, cotizaciones, compra-venta de aires, materiales, técnicos, nómina, cartera y reportes. Hecha por SoftGest.
+App web para **empresas de mantenimiento de aires acondicionados**: agenda de visitas, órdenes de servicio, plan de mantenimiento preventivo con **alertas automáticas**, clientes y sus equipos, garantías, cotizaciones, compra-venta de aires, materiales, técnicos, cartera y reportes. Hecha por SoftGest.
 
 ## Módulos
 
@@ -14,7 +14,7 @@ App web para **empresas de mantenimiento de aires acondicionados**: agenda de vi
 | **Cotizaciones** | Servicios y repuestos, validez, PDF/imagen y botón para convertirla en orden cuando el cliente la aprueba. |
 | **Venta de equipos** | Compra-venta sin inventario: costo del proveedor + flete vs. precio al cliente = ganancia. Puede agregar el equipo a la ficha del cliente y **agendar la instalación**. |
 | **Materiales y compras** | Gas, tubería, capacitores, filtros… con costo promedio, precio al cliente, alerta de mínimo y conteo físico. |
-| **Técnicos y nómina** | Pago por comisión (% o valor fijo por servicio), salario fijo o mixto. La nómina suma sola las comisiones pendientes, salario, auxilio, aportes y prestaciones. Desprendible en PDF. |
+| **Técnicos** | Pago por comisión (% o valor fijo por servicio) que queda como costo de cada orden; acceso propio desde el celular. Los sueldos fijos se anotan en Gastos. |
 | **Cartera** | Órdenes y ventas a crédito, vencidas, abonos y recordatorio de pago por WhatsApp. |
 | **Resumen y reportes** | Ingresos, costos, ganancia neta, servicios por tipo, por técnico, por cliente. Excel completo con la agenda de preventivos de 90 días. |
 | **Gastos, herramientas y distribución** | Combustible, arriendo, celulares…; herramientas con depreciación; regla de reparto del dinero. |
@@ -24,7 +24,7 @@ App web para **empresas de mantenimiento de aires acondicionados**: agenda de vi
 1. Cada compra actualiza el costo promedio del material.
 2. Cada orden terminada: `cobrado − materiales (al costo) − pago al técnico − transporte = ganancia`.
 3. Cada venta de equipo: `precio − costo del proveedor − flete = ganancia`.
-4. Ganancia neta = ganancia de órdenes y equipos − nómina (sin comisiones, que ya van en cada orden) − gastos − desgaste de herramientas.
+4. Ganancia neta = ganancia de órdenes y equipos − gastos (incluye sueldos fijos) − desgaste de herramientas.
 
 > Los documentos son soporte del servicio; **no reemplazan la factura electrónica DIAN**.
 

@@ -19,7 +19,7 @@
     <div class="form-row">
       <div class="field"><label>Se le paga</label><select class="input" name="tipo_pago" id="tipo">
         {% set st = F.tipo_pago or (e.tipo_pago if e else 'comision') %}{% for k, v in tipos.items() %}<option value="{{ k }}" {{ 'selected' if k == st }}>{{ v }}</option>{% endfor %}</select></div>
-      <div class="field" id="salBox"><label>Salario mensual ($)</label><input class="input" name="salario" inputmode="numeric" value="{{ F.salario or ((e.salario|round|int) if e and e.salario else '') }}"></div>
+      <div class="field" id="salBox"><label>Sueldo mensual de referencia ($)</label><input class="input" name="salario" inputmode="numeric" value="{{ F.salario or ((e.salario|round|int) if e and e.salario else '') }}"></div>
     </div>
     <div class="form-row" id="comBox">
       <div class="field"><label>Comisión</label><select class="input" name="comision_tipo">
@@ -28,7 +28,6 @@
         <div class="hint">El porcentaje se calcula sobre la mano de obra cobrada (sin materiales). En cada orden se puede ajustar.</div></div>
     </div>
     <p class="hint" id="tipoHint" style="margin-top:-6px"></p>
-    <label class="check" style="margin-bottom:14px"><input type="checkbox" name="aux_transporte" value="1" {{ 'checked' if (F.aux_transporte if F else (e.aux_transporte if e else True)) }}> <span>Recibe auxilio de transporte <small class="muted">(si gana hasta 2 salarios mínimos)</small></span></label>
 
     <h3 style="margin:6px 0 10px">Acceso a la app</h3>
     {% if e and e.usuario %}
@@ -49,9 +48,9 @@
 {% block scripts %}
 <script>
   const t = document.getElementById('tipo'), cu = document.getElementById('crearU');
-  const H = { comision: 'Se le paga por cada servicio terminado: la app suma sus comisiones al liquidar la nómina.',
-    fijo: 'Sueldo mensual proporcional a los días. Sus órdenes no generan comisión.',
-    mixto: 'Sueldo básico + comisión por cada servicio terminado.' };
+  const H = { comision: 'Se le paga por cada servicio terminado: la app suma sus comisiones en cada orden y en Reportes.',
+    fijo: 'Sueldo fijo: no genera comisión por orden. El pago del sueldo se anota en Gastos.',
+    mixto: 'Sueldo fijo (se anota en Gastos) + comisión por cada servicio terminado.' };
   const ui = () => {
     document.getElementById('salBox').style.display = t.value === 'comision' ? 'none' : '';
     document.getElementById('comBox').style.display = t.value === 'fijo' ? 'none' : '';

@@ -1,7 +1,7 @@
 {% extends "base.html" %}
 {% block title %}Configuración{% endblock %}
 {% block content %}
-<div class="page-head"><div><h1>Configuración</h1><p>Alertas de mantenimiento, garantías, distribución del dinero y nómina.</p></div></div>
+<div class="page-head"><div><h1>Configuración</h1><p>Alertas de mantenimiento, garantías y distribución del dinero.</p></div></div>
 <h2 style="margin-bottom:10px">Mantenimientos y garantías</h2>
 <form method="post" class="card" style="max-width:860px;margin-bottom:28px">
   <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
@@ -44,22 +44,6 @@
   </div>
 </form>
 
-<h2 style="margin:28px 0 10px">Nómina</h2>
-<form method="post" class="card" style="max-width:860px">
-  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-  <input type="hidden" name="seccion" value="nomina">
-  <div class="form-row">
-    <div class="field"><label>Salario mínimo mensual ($)</label><input class="input" type="number" step="any" min="0" name="smmlv" value="{{ '%.0f'|format(cfg.smmlv) }}"></div>
-    <div class="field"><label>Auxilio de transporte ($)</label><input class="input" type="number" step="any" min="0" name="aux_transporte" value="{{ '%.0f'|format(cfg.aux_transporte) }}"></div>
-    <div class="field"><label>Tarifa ARL (%)</label><input class="input" type="number" step="any" min="0" max="10" name="nom_arl_pct" value="{{ '%g'|format(cfg.nom_arl_pct) }}"><div class="hint">Riesgo I 0,522% · II 1,044% · III 2,436% (técnicos en alturas suelen ser III o IV 4,35%). Confírmalo con tu ARL.</div></div>
-  </div>
-  <label class="check"><input type="checkbox" name="nom_aportes" value="1" {{ 'checked' if cfg.nom_aportes }}> <span>Por defecto, calcular seguridad social (salud, pensión, ARL y caja)</span></label>
-  <label class="check" style="margin-top:6px"><input type="checkbox" name="nom_prestaciones" value="1" {{ 'checked' if cfg.nom_prestaciones }}> <span>Por defecto, provisionar prestaciones sociales</span></label>
-  <label class="check" style="margin-top:6px"><input type="checkbox" name="nom_salud_empleador" value="1" {{ 'checked' if cfg.nom_salud_empleador }}> <span>La empresa paga salud del empleador (8,5%)</span></label>
-  <div class="hint" style="margin:2px 0 12px 24px">Normalmente no aplica a empleados que ganan menos de 10 salarios mínimos (exoneración). Pregúntale a tu contador.</div>
-  <div class="actions"><button class="btn">Guardar nómina</button></div>
-  <p class="hint" style="margin-top:10px">Valores 2026 por defecto: salario mínimo $1.750.905 y auxilio de transporte $249.095. Actualízalos cada enero. Estos ajustes solo cambian las liquidaciones nuevas.</p>
-</form>
 {% endblock %}
 {% block scripts %}
 <script>

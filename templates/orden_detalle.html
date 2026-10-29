@@ -12,7 +12,7 @@
     {% if wa_cli %}<a class="btn wa" href="{{ wa_cli }}" target="_blank" rel="noopener">WhatsApp al cliente</a>{% endif %}
     <a class="btn sec" href="{{ url_for('orden_documento', id=o.id, fmt='pdf') }}" target="_blank">PDF</a>
     <a class="btn sec" href="{{ url_for('orden_documento', id=o.id, fmt='jpg') }}" target="_blank" title="Imagen para enviar por WhatsApp">Imagen</a>
-    {% if puede('admin', 'asesor') and not o.anulada and not o.nomina_id %}<a class="btn sec" href="{{ url_for('orden_editar', id=o.id) }}">Editar</a>{% endif %}
+    {% if puede('admin', 'asesor') and not o.anulada %}<a class="btn sec" href="{{ url_for('orden_editar', id=o.id) }}">Editar</a>{% endif %}
   </div>
 </div>
 
@@ -128,7 +128,7 @@
     <h3 style="margin:18px 0 6px">Rentabilidad</h3>
     <div class="sum-line"><span>Cobrado (sin IVA)</span><b>{{ o.total|cop }}</b></div>
     <div class="sum-line"><span>− Materiales (al costo)</span><b>{{ o.costo_materiales|cop }}</b></div>
-    <div class="sum-line"><span>− Pago al técnico{% if o.nomina_id %} <span class="badge ok">pagado</span>{% endif %}</span><b>{{ o.pago_tecnico|cop }}</b></div>
+    <div class="sum-line"><span>− Pago al técnico</span><b>{{ o.pago_tecnico|cop }}</b></div>
     {% if o.otros_costos %}<div class="sum-line"><span>− Transporte / otros</span><b>{{ o.otros_costos|cop }}</b></div>{% endif %}
     <div class="sum-total"><span>Ganancia</span><span class="{{ 'pos' if o.ganancia >= 0 else 'neg' }}">{{ o.ganancia|cop }}</span></div>
     {% endif %}
@@ -154,7 +154,7 @@
       {% if puede('admin', 'asesor') and o.estado != 'cancelada' and o.estado != 'terminada' %}
       <form method="post" action="{{ url_for('orden_estado', id=o.id) }}" onsubmit="return confirm('¿Cancelar esta visita?')"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="estado" value="cancelada"><button class="btn sec sm">Cancelar visita</button></form>
       {% endif %}
-      {% if puede('admin', 'asesor') and o.estado in ('terminada', 'cancelada') and not o.nomina_id %}
+      {% if puede('admin', 'asesor') and o.estado in ('terminada', 'cancelada') %}
       <form method="post" action="{{ url_for('orden_estado', id=o.id) }}" onsubmit="return confirm('¿Reabrir la orden? Los materiales vuelven a la bodega hasta que se termine de nuevo.')"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="estado" value="programada"><button class="btn sec sm">Reabrir</button></form>
       {% endif %}
       {% if puede('admin') %}

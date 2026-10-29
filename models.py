@@ -56,7 +56,7 @@ def _asignar_empresa(session, ctx, inst):
                 if eid is None:
                     raise RuntimeError(f"No hay empresa activa para guardar {type(obj).__name__}")
                 obj.empresa_id = eid
-            # Consecutivo propio de cada empresa (órdenes, cotizaciones, ventas de equipos, nómina)
+            # Consecutivo propio de cada empresa (órdenes, cotizaciones, ventas de equipos)
             if hasattr(type(obj), "consecutivo") and getattr(obj, "consecutivo", 1) is None:
                 cls = type(obj)
                 if cls not in siguientes:
@@ -133,8 +133,8 @@ CATEGORIAS_INSUMO = ["Gas refrigerante", "Tubería y aislamiento", "Capacitores 
 
 TIPOS_PAGO = {
     "comision": "Por servicio (comisión)",
-    "fijo": "Salario fijo mensual",
-    "mixto": "Salario fijo + comisión",
+    "fijo": "Sueldo fijo (se anota en Gastos)",
+    "mixto": "Sueldo fijo + comisión",
 }
 
 COMISION_TIPOS = {"pct": "% del valor del servicio", "fijo": "Valor fijo por servicio"}
@@ -144,7 +144,7 @@ METODOS_PAGO = ["Efectivo", "Nequi", "Daviplata", "Transferencia", "Tarjeta"]
 TIPOS_CLIENTE = ["Hogar", "Comercio / local", "Oficina / empresa", "Conjunto / edificio",
                  "Institución (colegio, clínica…)", "Otro"]
 
-CATEGORIAS_GASTO = ["Combustible / transporte", "Arriendo", "Servicios públicos", "Internet / celular",
+CATEGORIAS_GASTO = ["Sueldos y pagos a técnicos", "Seguridad social y prestaciones", "Combustible / transporte", "Arriendo", "Servicios públicos", "Internet / celular",
                     "Publicidad", "Herramienta menor", "Mantenimiento de vehículo", "Dotación y seguridad",
                     "Honorarios (contador, asesorías)", "Impuestos y trámites", "Papelería y aseo",
                     "Pérdidas de inventario", "Otros"]
@@ -230,7 +230,7 @@ class Usuario(UserMixin, db.Model):
 
 
 class Configuracion(EmpresaMixin, db.Model):
-    """Una sola fila por empresa: alertas, garantías, distribución del dinero y nómina."""
+    """Una sola fila por empresa: alertas, garantías y distribución del dinero."""
     __tablename__ = "vt_configuracion"
     id = db.Column(db.Integer, primary_key=True)
     # Mantenimientos y garantías
@@ -243,13 +243,6 @@ class Configuracion(EmpresaMixin, db.Model):
     pct_dueno = db.Column(db.Float, nullable=False, default=30)
     pct_emergencia = db.Column(db.Float, nullable=False, default=10)
     base = db.Column(db.String(20), nullable=False, default="ganancia")  # ventas | ganancia
-    # Nómina (valores 2026; se pueden cambiar cada año)
-    smmlv = db.Column(db.Float, nullable=False, default=1750905)
-    aux_transporte = db.Column(db.Float, nullable=False, default=249095)
-    nom_aportes = db.Column(db.Boolean, nullable=False, default=True)
-    nom_salud_empleador = db.Column(db.Boolean, nullable=False, default=False)
-    nom_arl_pct = db.Column(db.Float, nullable=False, default=2.436)  # riesgo III: trabajo técnico en campo
-    nom_prestaciones = db.Column(db.Boolean, nullable=False, default=True)
 
     @classmethod
     def actual(cls):
@@ -450,7 +443,6 @@ class Empleado(EmpresaMixin, db.Model):
     salario = db.Column(db.Float, nullable=False, default=0)  # mensual (fijo o mixto)
     comision_tipo = db.Column(db.String(10), nullable=False, default="pct")
     comision_valor = db.Column(db.Float, nullable=False, default=0)
-    aux_transporte = db.Column(db.Boolean, nullable=False, default=True)
     fecha_ingreso = db.Column(db.Date)
     usuario_id = db.Column(db.Integer, db.ForeignKey("vt_usuarios.id"))  # su acceso a la app (rol técnico)
     activo = db.Column(db.Boolean, nullable=False, default=True)
@@ -520,7 +512,6 @@ class Orden(EmpresaMixin, db.Model):
     ganancia = db.Column(db.Float, nullable=False, default=0)
     aplicada = db.Column(db.Boolean, nullable=False, default=False)  # ya descontó materiales del inventario
     anulada = db.Column(db.Boolean, nullable=False, default=False)
-    nomina_id = db.Column(db.Integer, db.ForeignKey("vt_nomina.id"), index=True)  # comisión liquidada
     nota = db.Column(db.String(255))
     usuario_id = db.Column(db.Integer, db.ForeignKey("vt_usuarios.id"))
     creado = db.Column(db.DateTime, default=ahora)
@@ -833,54 +824,6 @@ class Abono(EmpresaMixin, db.Model):
         return self.orden or self.venta_equipo
 
 
-# ------------------------------------------------------------------ nómina
-class PagoNomina(EmpresaMixin, db.Model):
-    """Liquidación de nómina de un técnico para un periodo."""
-    __tablename__ = "vt_nomina"
-    id = db.Column(db.Integer, primary_key=True)
-    consecutivo = db.Column(db.Integer)
-    empleado_id = db.Column(db.Integer, db.ForeignKey("vt_empleados.id"), nullable=False, index=True)
-    desde = db.Column(db.Date, nullable=False)
-    hasta = db.Column(db.Date, nullable=False)
-    fecha_pago = db.Column(db.Date, nullable=False, index=True)
-    dias = db.Column(db.Integer, nullable=False, default=30)
-    basico = db.Column(db.Float, nullable=False, default=0)
-    aux_transporte = db.Column(db.Float, nullable=False, default=0)
-    comisiones = db.Column(db.Float, nullable=False, default=0)
-    horas_extra = db.Column(db.Float, nullable=False, default=0)
-    bonificaciones = db.Column(db.Float, nullable=False, default=0)
-    deduccion_salud = db.Column(db.Float, nullable=False, default=0)
-    deduccion_pension = db.Column(db.Float, nullable=False, default=0)
-    otras_deducciones = db.Column(db.Float, nullable=False, default=0)
-    deducciones_detalle = db.Column(db.String(255))
-    neto = db.Column(db.Float, nullable=False, default=0)
-    aportes = db.Column(db.Float, nullable=False, default=0)
-    provisiones = db.Column(db.Float, nullable=False, default=0)
-    costo_empresa = db.Column(db.Float, nullable=False, default=0)
-    gasto = db.Column(db.Float, nullable=False, default=0)  # costo_empresa − comisiones (ya van al costo de la orden)
-    metodo = db.Column(db.String(30), default="Efectivo")
-    nota = db.Column(db.String(255))
-    anulada = db.Column(db.Boolean, nullable=False, default=False)
-    usuario_id = db.Column(db.Integer, db.ForeignKey("vt_usuarios.id"))
-
-    empleado = db.relationship("Empleado", lazy="joined")
-    usuario = db.relationship("Usuario", lazy="joined")
-    ordenes = db.relationship("Orden", foreign_keys="Orden.nomina_id", lazy="selectin",
-                              order_by="Orden.fecha_fin")
-
-    @property
-    def numero(self):
-        return f"NM-{(self.consecutivo or self.id):05d}"
-
-    @property
-    def devengado(self):
-        return self.basico + self.aux_transporte + self.comisiones + self.horas_extra + self.bonificaciones
-
-    @property
-    def deducciones(self):
-        return self.deduccion_salud + self.deduccion_pension + self.otras_deducciones
-
-
 # ------------------------------------------------------------------ activos
 class Activo(EmpresaMixin, db.Model):
     """Herramientas y equipos propios (bomba de vacío, manifold, recuperadora, moto…)."""
@@ -932,7 +875,7 @@ class Activo(EmpresaMixin, db.Model):
 
 
 class Gasto(EmpresaMixin, db.Model):
-    """Gastos del negocio que no son materiales, nómina ni herramientas."""
+    """Gastos del negocio que no son materiales ni herramientas (incluye sueldos fijos)."""
     __tablename__ = "vt_gastos"
     id = db.Column(db.Integer, primary_key=True)
     fecha = db.Column(db.Date, nullable=False, index=True)

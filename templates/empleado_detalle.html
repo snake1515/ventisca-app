@@ -8,16 +8,15 @@
     {% if e.whatsapp %}<a class="btn sec" href="{{ e.whatsapp }}" target="_blank">WhatsApp</a>{% endif %}
     <a class="btn sec" href="{{ url_for('agenda', tecnico=e.id) }}">Su agenda</a>
     <a class="btn sec" href="{{ url_for('empleado_form', id=e.id) }}">Editar</a>
-    {% if e.activo %}<a class="btn" href="{{ url_for('nomina_nueva', empleado_id=e.id) }}">✉ Liquidar nómina</a>{% endif %}
   </div>
 </div>
 <div class="kpis">
-  <div class="kpi hl"><div class="lbl">Comisión pendiente</div><div class="val">{{ total_pend|cop }}</div><div class="sub">{{ n_pend }} orden{{ 'es' if n_pend != 1 }} sin liquidar</div></div>
+  <div class="kpi hl"><div class="lbl">Comisiones este mes</div><div class="val">{{ com_mes|cop }}</div><div class="sub">pago por servicios terminados</div></div>
   <div class="kpi"><div class="lbl">Servicios este mes</div><div class="val">{{ n_mes }}</div><div class="sub">{% if garantias_mes %}{{ garantias_mes }} visita{{ 's' if garantias_mes != 1 }} en garantía{% else %}sin visitas en garantía{% endif %}</div></div>
-  <div class="kpi"><div class="lbl">Último pago</div><div class="val">{{ pagos[0].neto|cop if pagos else '—' }}</div><div class="sub">{{ pagos[0].fecha_pago|fecha if pagos else 'Sin pagos' }}</div></div>
+  <div class="kpi"><div class="lbl">Cobrado este mes</div><div class="val">{{ cobrado_mes|cop }}</div><div class="sub">sus órdenes, sin IVA</div></div>
   <div class="kpi"><div class="lbl">Acceso</div><div class="val" style="font-size:1.05rem">{{ e.usuario.username if e.usuario else 'Sin usuario' }}</div></div>
 </div>
-<div class="grid g2">
+<div>
   <div class="card">
     <div class="card-head"><h2>Órdenes recientes</h2></div>
     <div class="table-wrap"><table>
@@ -25,18 +24,8 @@
       <tbody>{% for o in ordenes %}
         <tr><td><a href="{{ url_for('orden_detalle', id=o.id) }}">{{ num_orden(o) }}</a><br><small>{{ o.tipo_txt }}</small></td><td>{{ (o.fecha_fin or o.fecha)|fecha }}</td>
           <td>{{ o.cliente_nombre }}</td><td class="num">{{ o.pago_tecnico|cop if o.pago_tecnico else '—' }}</td>
-          <td>{% if not o.terminada %}<span class="badge {{ o.estado_info[1] }}">{{ o.estado_info[0] }}</span>{% elif o.nomina_id %}<a class="badge ok" href="{{ url_for('nomina_detalle', id=o.nomina_id) }}">Pagada</a>{% elif o.pago_tecnico %}<span class="badge warn">Por pagar</span>{% endif %}</td></tr>
+          <td>{% if not o.terminada %}<span class="badge {{ o.estado_info[1] }}">{{ o.estado_info[0] }}</span>{% endif %}</td></tr>
       {% else %}<tr><td colspan="5" class="empty">Aún no tiene órdenes asignadas.</td></tr>{% endfor %}</tbody>
-    </table></div>
-  </div>
-  <div class="card">
-    <div class="card-head"><h2>Pagos de nómina</h2></div>
-    <div class="table-wrap"><table>
-      <thead><tr><th>N.º</th><th>Periodo</th><th class="num">Neto</th><th class="num">Costo empresa</th></tr></thead>
-      <tbody>{% for p in pagos %}
-        <tr class="{{ 'anulada' if p.anulada }}"><td><a href="{{ url_for('nomina_detalle', id=p.id) }}">{{ p.numero }}</a></td><td>{{ p.desde.strftime('%d/%m') }}–{{ p.hasta|fecha }}</td>
-          <td class="num">{{ p.neto|cop }}</td><td class="num">{{ p.costo_empresa|cop }}</td></tr>
-      {% else %}<tr><td colspan="4" class="empty">Aún no hay pagos.</td></tr>{% endfor %}</tbody>
     </table></div>
   </div>
 </div>

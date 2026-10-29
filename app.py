@@ -16,7 +16,6 @@ from flask_login import (LoginManager, current_user, login_required,
 from sqlalchemy import func, or_
 
 import comprobantes
-import nomina as nom
 import reportes as rpt
 from activos_calc import activos_vigentes, depreciacion_dia, depreciacion_periodo
 from models import (CAPACIDADES, CATEGORIAS_GASTO, CATEGORIAS_INSUMO, COMISION_TIPOS, CON_GARANTIA,
@@ -24,7 +23,7 @@ from models import (CAPACIDADES, CATEGORIAS_GASTO, CATEGORIAS_INSUMO, COMISION_T
                     REFRIGERANTES, ROLES, TIPOS_CLIENTE, TIPOS_EQUIPO, TIPOS_PAGO, TIPOS_SERVICIO, UNIDADES,
                     Abono, Activo, Cliente, CompraInsumo, Configuracion, Cotizacion, CotizacionLinea,
                     DatosNegocio, Empleado, Empresa, EmpresaMixin, Equipo, Gasto, Insumo, Orden, OrdenLinea,
-                    OrdenMaterial, PagoNomina, Usuario, VentaEquipo, ahora, db, empresa_id_actual,
+                    OrdenMaterial, Usuario, VentaEquipo, ahora, db, empresa_id_actual,
                     set_empresa, wa_link)
 from services import (ErrorNegocio, ajustar_stock, anular_compra, anular_orden, anular_venta_equipo,
                       calcular_venta_equipo, cambiar_estado, garantia_por_defecto, garantia_vigente,
@@ -138,14 +137,10 @@ def periodo():
 
 
 def gastos_por_dia(desde, hasta):
-    """dict date -> gastos + nómina (sin comisiones), entre fechas date (inclusive)."""
+    """dict date -> gastos, entre fechas date (inclusive)."""
     out = defaultdict(float)
     for f, v in (db.session.query(Gasto.fecha, func.sum(Gasto.valor))
                  .filter(Gasto.fecha >= desde, Gasto.fecha <= hasta).group_by(Gasto.fecha).all()):
-        out[f] += v or 0
-    for f, v in (db.session.query(PagoNomina.fecha_pago, func.sum(PagoNomina.gasto))
-                 .filter(PagoNomina.anulada.is_(False), PagoNomina.fecha_pago >= desde,
-                         PagoNomina.fecha_pago <= hasta).group_by(PagoNomina.fecha_pago).all()):
         out[f] += v or 0
     return out
 
@@ -573,11 +568,8 @@ def inicio():
     gastos_det = (db.session.query(Gasto.categoria, func.sum(Gasto.valor))
                   .filter(Gasto.fecha >= ini.date(), Gasto.fecha < fin.date())
                   .group_by(Gasto.categoria).order_by(func.sum(Gasto.valor).desc()).all())
-    nomina_gasto = db.session.query(func.coalesce(func.sum(PagoNomina.gasto), 0)).filter(
-        PagoNomina.anulada.is_(False), PagoNomina.fecha_pago >= ini.date(),
-        PagoNomina.fecha_pago < fin.date()).scalar() or 0
     gastos_neg = sum(v or 0 for _, v in gastos_det)
-    gastos_tot = gastos_neg + nomina_gasto
+    gastos_tot = gastos_neg
     neta = bruta - depreciacion - gastos_tot
 
     por_tipo = defaultdict(lambda: [0, 0.0, 0.0])
@@ -615,7 +607,7 @@ def inicio():
     return render_template(
         "dashboard.html", desde=desde, hasta=hasta, ingresos=ingresos, serv=serv, ventas_eq=ventas_eq,
         costo_serv=costo_serv, costo_eq=costo_eq, bruta=bruta, depreciacion=depreciacion, neta=neta,
-        gastos_det=gastos_det, gastos_tot=gastos_tot, nomina_gasto=nomina_gasto,
+        gastos_det=gastos_det, gastos_tot=gastos_tot,
         margen=(neta / ingresos * 100) if ingresos else 0, n_ordenes=len(ords), n_ves=len(ves),
         n_equipos_atendidos=sum(len(o.equipos) for o in ords), ganancia_eq=sum(v.ganancia for v in ves),
         por_tipo=por_tipo, serie=serie, agenda_hoy=agenda_hoy, hoy_d=hoy_d,
@@ -892,9 +884,6 @@ def orden_editar(id):
     o = db.session.get(Orden, id) or abort(404)
     if o.anulada:
         flash("La orden está anulada; no se puede editar.", "error")
-        return redirect(url_for("orden_detalle", id=id))
-    if o.nomina_id:
-        flash("La comisión de esta orden ya se pagó en nómina. Para editarla, anula primero esa nómina.", "error")
         return redirect(url_for("orden_detalle", id=id))
     if request.method == "POST":
         lineas, materiales, estado, errores = _leer_orden_form(o, request.form)
@@ -1606,12 +1595,9 @@ def gastos():
     por_cat = defaultdict(float)
     for x in items:
         por_cat[x.categoria] += x.valor
-    nomina_gasto = db.session.query(func.coalesce(func.sum(PagoNomina.gasto), 0)).filter(
-        PagoNomina.anulada.is_(False), PagoNomina.fecha_pago >= ini.date(),
-        PagoNomina.fecha_pago < fin.date()).scalar() or 0
     return render_template("gastos.html", items=items, desde=desde, hasta=hasta, cat=cat,
                            categorias=CATEGORIAS_GASTO, por_cat=sorted(por_cat.items(), key=lambda x: -x[1]),
-                           nomina_gasto=nomina_gasto, total=sum(x.valor for x in items))
+                           total=sum(x.valor for x in items))
 
 
 @app.route("/gastos/nuevo", methods=["GET", "POST"])
@@ -2025,19 +2011,7 @@ def configuracion():
     if request.method == "POST":
         f = request.form
         sec = f.get("seccion")
-        if sec == "nomina":
-            smmlv, aux, arl = n(f.get("smmlv")), n(f.get("aux_transporte")), n(f.get("nom_arl_pct"))
-            if smmlv <= 0 or aux < 0 or not 0 <= arl <= 10:
-                flash("Revisa los valores de nómina.", "error")
-            else:
-                cfg.smmlv, cfg.aux_transporte, cfg.nom_arl_pct = smmlv, aux, arl
-                cfg.nom_aportes = bool(f.get("nom_aportes"))
-                cfg.nom_prestaciones = bool(f.get("nom_prestaciones"))
-                cfg.nom_salud_empleador = bool(f.get("nom_salud_empleador"))
-                db.session.commit()
-                flash("Parámetros de nómina guardados.", "ok")
-                return redirect(url_for("configuracion"))
-        elif sec == "mantenimiento":
+        if sec == "mantenimiento":
             dias, frec, gar = int(n(f.get("dias_aviso"))), int(n(f.get("frecuencia_def"))), int(n(f.get("garantia_dias")))
             msg = f.get("msg_recordatorio", "").strip()
             if not 1 <= dias <= 90 or frec not in FRECUENCIAS or not 0 <= gar <= 365:
@@ -2179,15 +2153,15 @@ def empleados():
     if ver != "todos":
         q = q.filter_by(activo=True)
     items = q.order_by(Empleado.activo.desc(), Empleado.nombre).all()
-    pend = dict(db.session.query(Orden.tecnico_id, func.sum(Orden.pago_tecnico))
-                .filter(Orden.nomina_id.is_(None), Orden.estado == "terminada", Orden.anulada.is_(False),
-                        Orden.tecnico_id.isnot(None)).group_by(Orden.tecnico_id).all())
     ini_mes = datetime.combine(ahora().date().replace(day=1), datetime.min.time())
+    com_mes = dict(db.session.query(Orden.tecnico_id, func.sum(Orden.pago_tecnico))
+                   .filter(Orden.estado == "terminada", Orden.anulada.is_(False), Orden.fecha_fin >= ini_mes)
+                   .group_by(Orden.tecnico_id).all())
     mes = dict(db.session.query(Orden.tecnico_id, func.count(Orden.id))
                .filter(Orden.estado == "terminada", Orden.anulada.is_(False), Orden.fecha_fin >= ini_mes)
                .group_by(Orden.tecnico_id).all())
-    return render_template("empleados.html", items=items, pend=pend, mes=mes, ver=ver,
-                           total_pend=sum(v or 0 for v in pend.values()))
+    return render_template("empleados.html", items=items, com_mes=com_mes, mes=mes, ver=ver,
+                           total_com=sum(v or 0 for v in com_mes.values()))
 
 
 @app.route("/empleados/nuevo", methods=["GET", "POST"])
@@ -2229,7 +2203,6 @@ def empleado_form(id=None):
             e.tipo_pago, e.salario = tipo, salario if tipo != "comision" else 0
             e.comision_tipo = f.get("comision_tipo") if f.get("comision_tipo") in COMISION_TIPOS else "pct"
             e.comision_valor = n(f.get("comision_valor")) if tipo != "fijo" else 0
-            e.aux_transporte = bool(f.get("aux_transporte"))
             e.fecha_ingreso = _fecha(f.get("fecha_ingreso"))
             e.activo = bool(f.get("activo")) if id else True
             if f.get("crear_usuario") and not e.usuario:
@@ -2252,98 +2225,11 @@ def empleado_detalle(id):
     e = db.session.get(Empleado, id) or abort(404)
     ords = (Orden.query.filter(Orden.tecnico_id == id, Orden.anulada.is_(False))
             .order_by(Orden.fecha.desc()).limit(40).all())
-    pendiente = [o for o in ords if o.terminada and not o.nomina_id and o.pago_tecnico]
-    pagos = PagoNomina.query.filter_by(empleado_id=id).order_by(PagoNomina.fecha_pago.desc()).limit(24).all()
     ini_mes = datetime.combine(ahora().date().replace(day=1), datetime.min.time())
     mes = [o for o in ords if o.terminada and o.fecha_fin >= ini_mes]
-    return render_template("empleado_detalle.html", e=e, ordenes=ords, pagos=pagos,
-                           total_pend=sum(o.pago_tecnico for o in pendiente), n_pend=len(pendiente),
-                           n_mes=len(mes), garantias_mes=sum(1 for o in mes if o.en_garantia))
-
-
-# ------------------------------------------------------------------- nómina
-@app.route("/nomina")
-@rol_requerido("admin")
-def nominas():
-    ini, fin, desde, hasta = periodo()
-    items = (PagoNomina.query.filter(PagoNomina.fecha_pago >= ini.date(), PagoNomina.fecha_pago < fin.date())
-             .order_by(PagoNomina.fecha_pago.desc(), PagoNomina.id.desc()).all())
-    validas = [x for x in items if not x.anulada]
-    return render_template("nominas.html", items=items, desde=desde, hasta=hasta,
-                           neto=sum(x.neto for x in validas), costo=sum(x.costo_empresa for x in validas),
-                           comisiones=sum(x.comisiones for x in validas), gasto=sum(x.gasto for x in validas))
-
-
-@app.route("/nomina/nueva", methods=["GET", "POST"])
-@rol_requerido("admin")
-def nomina_nueva():
-    cfg = Configuracion.actual()
-    src = request.form if request.method == "POST" else request.args
-    hoy_d = ahora().date()
-    emp = db.session.get(Empleado, int(n(src.get("empleado_id")))) if n(src.get("empleado_id")) else None
-    d0 = hoy_d.replace(day=1) if hoy_d.day <= 15 else hoy_d.replace(day=16)
-    h0 = hoy_d.replace(day=15) if hoy_d.day <= 15 else (hoy_d.replace(day=28) + timedelta(days=4)).replace(day=1) - timedelta(days=1)
-    desde = _fecha(src.get("desde"), d0)
-    hasta = _fecha(src.get("hasta"), h0)
-    dias_def = min((hasta - desde).days + 1, 30) if hasta >= desde else 0
-    if desde.day == 16 and hasta.day >= 28 and hasta.month == desde.month:
-        dias_def = 15
-    dias = int(n(src.get("dias"), dias_def)) if src.get("dias") not in (None, "") else dias_def
-    primera = not src.get("calc")
-    ss = cfg.nom_aportes if primera else bool(src.get("seguridad_social"))
-    pr = cfg.nom_prestaciones if primera else bool(src.get("prestaciones"))
-    extras = dict(horas_extra=n(src.get("horas_extra")), bonificaciones=n(src.get("bonificaciones")),
-                  otras_deducciones=n(src.get("otras_deducciones")))
-    if request.method == "POST" and src.get("accion") == "registrar":
-        try:
-            pago = nom.registrar(emp, cfg, desde, hasta, _fecha(src.get("fecha_pago"), hoy_d), dias,
-                                 deducciones_detalle=src.get("deducciones_detalle", ""),
-                                 seguridad_social=ss, prestaciones=pr, metodo=src.get("metodo", "Efectivo"),
-                                 nota=src.get("nota", ""), usuario_id=current_user.id, **extras)
-            db.session.commit()
-            flash(f"Nómina {pago.numero} de {emp.nombre} registrada: neto {filtro_cop(pago.neto)}.", "ok")
-            return redirect(url_for("nomina_detalle", id=pago.id))
-        except ErrorNegocio as e:
-            db.session.rollback()
-            for m in e.errores:
-                flash(m, "error")
-    lineas = nom.comisiones_pendientes(emp, desde, hasta) if emp and emp.tipo_pago != "fijo" else []
-    calc = nom.calcular(emp, cfg, dias, sum(o.pago_tecnico for o in lineas), seguridad_social=ss,
-                        prestaciones=pr, **extras) if emp else None
-    return render_template("nomina_form.html", emp=emp, empleados=Empleado.query.filter_by(activo=True)
-                           .order_by(Empleado.nombre).all(), desde=desde.isoformat(), hasta=hasta.isoformat(),
-                           dias=dias, ss=ss, pr=pr, extras=extras, lineas=lineas, calc=calc, cfg=cfg,
-                           metodos=METODOS_PAGO + ["Consignación"], src=src)
-
-
-@app.route("/nomina/<int:id>")
-@rol_requerido("admin")
-def nomina_detalle(id):
-    p = db.session.get(PagoNomina, id) or abort(404)
-    return render_template("nomina_detalle.html", p=p)
-
-
-@app.route("/nomina/<int:id>/desprendible.pdf")
-@rol_requerido("admin")
-def nomina_pdf(id):
-    p = db.session.get(PagoNomina, id) or abort(404)
-    modo = "attachment" if request.args.get("descargar") else "inline"
-    return Response(comprobantes.nomina_pdf(p, DatosNegocio.actual(), num_orden), mimetype="application/pdf",
-                    headers={"Content-Disposition": f'{modo}; filename="{p.numero}.pdf"'})
-
-
-@app.route("/nomina/<int:id>/anular", methods=["POST"])
-@rol_requerido("admin")
-def nomina_anular(id):
-    p = db.session.get(PagoNomina, id) or abort(404)
-    try:
-        nom.anular(p)
-        db.session.commit()
-        flash(f"Nómina {p.numero} anulada. Las comisiones de ese periodo vuelven a quedar pendientes.", "ok")
-    except ErrorNegocio as e:
-        db.session.rollback()
-        flash(e.errores[0], "error")
-    return redirect(url_for("nomina_detalle", id=id))
+    return render_template("empleado_detalle.html", e=e, ordenes=ords, n_mes=len(mes),
+                           com_mes=sum(o.pago_tecnico for o in mes), cobrado_mes=sum(o.total for o in mes),
+                           garantias_mes=sum(1 for o in mes if o.en_garantia))
 
 
 # ---------------------------------------------------------------- usuarios

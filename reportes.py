@@ -9,7 +9,7 @@ from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
 from openpyxl.utils import get_column_letter
 
 from activos_calc import activos_vigentes, depreciacion_dia
-from models import (TIPOS_SERVICIO, Activo, CompraInsumo, Equipo, Gasto, Orden, PagoNomina, VentaEquipo, ahora)
+from models import (TIPOS_SERVICIO, Activo, CompraInsumo, Equipo, Gasto, Orden, VentaEquipo, ahora)
 
 MESES = ["ene", "feb", "mar", "abr", "may", "jun", "jul", "ago", "sep", "oct", "nov", "dic"]
 AGRUPACIONES = {"diario": "Por día", "semanal": "Por semana", "mensual": "Por mes"}
@@ -21,7 +21,6 @@ COLUMNAS = [  # clave, título, es dinero
     ("ventas_eq", "Venta de equipos", True),
     ("costo_eq", "Costo de equipos", True),
     ("bruta", "Ganancia bruta", True),
-    ("nomina", "Nómina (sin comisiones)", True),
     ("equipos", "Depreciación herramientas", True),
     ("gastos", "Gastos", True),
     ("neta", "Ganancia neta", True),
@@ -120,10 +119,6 @@ def generar(desde, hasta, agrupar):
     for a in Activo.query.filter(Activo.eliminado.is_(False), Activo.fecha_compra >= desde,
                                  Activo.fecha_compra <= hasta):
         filas[b(a.fecha_compra)]["compras_eq"] += a.valor
-    # Nómina: las comisiones ya están en el costo de cada orden; aquí va el resto
-    for n in PagoNomina.query.filter(PagoNomina.anulada.is_(False), PagoNomina.fecha_pago >= desde,
-                                     PagoNomina.fecha_pago <= hasta):
-        filas[b(n.fecha_pago)]["nomina"] += n.gasto
     gastos_cat = defaultdict(float)
     for g in Gasto.query.filter(Gasto.fecha >= desde, Gasto.fecha <= hasta):
         filas[b(g.fecha)]["gastos"] += g.valor
@@ -151,7 +146,7 @@ def generar(desde, hasta, agrupar):
         f = filas[k]
         f["ingresos"] = f["servicios"] + f["ventas_eq"]
         f["bruta"] = f["ingresos"] - f["costo_serv"] - f["costo_eq"]
-        f["neta"] = f["bruta"] - f["nomina"] - f["equipos"] - f["gastos"]
+        f["neta"] = f["bruta"] - f["equipos"] - f["gastos"]
         fila = {c: f[c] for c, _, _ in COLUMNAS}
         fila["ingresos"] = f["ingresos"]
         fila["margen"] = (f["neta"] / f["ingresos"] * 100) if f["ingresos"] else None
@@ -327,18 +322,6 @@ def excel(rep, desde, hasta, agrupar, negocio, num_orden):
                      (a.valor, FMT_COP), (a.valor, FMT_COP), (a.proveedor or "", None)])
         i += 1
     _anchos(w, [12, 34, 12, 12, 15, 15, 26])
-
-    w = wb.create_sheet("Nómina")
-    _encabezado(w, 1, ["Fecha pago", "N.º", "Empleado", "Periodo", "Básico", "Aux. transp.", "Comisiones",
-                       "Extras", "Bonif.", "Deducciones", "Neto pagado", "Aportes", "Prestaciones", "Costo empresa"])
-    for i, n in enumerate(PagoNomina.query.filter(PagoNomina.anulada.is_(False), PagoNomina.fecha_pago >= desde,
-                                                  PagoNomina.fecha_pago <= hasta)
-                          .order_by(PagoNomina.fecha_pago).all(), 2):
-        _fila(w, i, [(n.fecha_pago, FMT_F), (n.numero, None), (n.empleado.nombre, None),
-                     (f"{n.desde.strftime('%d/%m')}–{n.hasta.strftime('%d/%m/%Y')}", None)]
-              + [(v, FMT_COP) for v in (n.basico, n.aux_transporte, n.comisiones, n.horas_extra, n.bonificaciones,
-                                        n.deducciones, n.neto, n.aportes, n.provisiones, n.costo_empresa)])
-    _anchos(w, [12, 10, 24, 18] + [13] * 10)
 
     w = wb.create_sheet("Cartera")
     _encabezado(w, 1, ["Documento", "Fecha", "Cliente", "Vence", "Total", "Abonado", "Saldo", "Estado"])

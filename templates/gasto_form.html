@@ -14,7 +14,7 @@
       <div class="field"><label>Valor ($)</label><input class="input" type="number" step="any" min="0" name="valor" value="{{ request.form.valor or ('%.0f'|format(g.valor) if g else '') }}" required></div>
     </div>
     <div class="field"><label>Descripción <span id="req" class="muted" style="font-weight:400">(opcional)</span></label><input class="input" name="descripcion" id="desc" value="{{ request.form.descripcion or (g.descripcion or '' if g else '') }}" placeholder="Ej: Recibo de energía de octubre"></div>
-    <div class="note" style="margin-bottom:14px">Los materiales se registran en <b>Compras</b>, las herramientas en <b>Herramientas</b> y los sueldos en <b>Nómina</b>. Aquí van arriendo, energía, agua, gas, internet, fletes, contador y demás.</div>
+    <div class="note" style="margin-bottom:14px">Los materiales se registran en <b>Compras</b>, las herramientas en <b>Herramientas</b> Aquí van sueldos fijos, seguridad social, combustible, arriendo, servicios, celulares, contador y demás. Lo que se paga al técnico por cada orden ya queda en la orden.</div>
     <div class="actions"><button class="btn">Guardar</button><a class="btn sec" href="{{ url_for('gastos') }}">Cancelar</a></div>
   </form>
 </div>

@@ -12,7 +12,7 @@
   .col-neta { background: #f3fbf7; }
 </style>
 <div class="page-head">
-  <div><h1>Reportes</h1><p>Servicios, venta de equipos, compras, nómina, gastos y ganancias del {{ desde }} al {{ hasta }}.</p></div>
+  <div><h1>Reportes</h1><p>Servicios, venta de equipos, compras, gastos y ganancias del {{ desde }} al {{ hasta }}.</p></div>
   <a class="btn" href="{{ url_for('reportes_excel', agrupar=agrupar, desde=desde, hasta=hasta) }}">⇣ Descargar Excel</a>
 </div>
 
@@ -32,7 +32,7 @@
 <div class="kpis">
   <div class="kpi"><div class="lbl">Ingresos</div><div class="val">{{ t.ingresos|cop }}</div><div class="sub">{{ t.num_ordenes|num }} servicios {{ t.servicios|cop }} · equipos {{ t.ventas_eq|cop }}</div></div>
   <div class="kpi"><div class="lbl">Costos directos</div><div class="val">{{ (t.costo_serv + t.costo_eq)|cop }}</div><div class="sub">Materiales y técnicos {{ t.costo_serv|cop }} · equipos {{ t.costo_eq|cop }}</div></div>
-  <div class="kpi"><div class="lbl">Gastos fijos</div><div class="val">{{ (t.nomina + t.equipos + t.gastos)|cop }}</div><div class="sub">Nómina {{ t.nomina|cop }} · herramientas {{ t.equipos|cop }} · gastos {{ t.gastos|cop }}</div></div>
+  <div class="kpi"><div class="lbl">Gastos fijos</div><div class="val">{{ (t.equipos + t.gastos)|cop }}</div><div class="sub">Herramientas {{ t.equipos|cop }} · gastos {{ t.gastos|cop }}</div></div>
   <div class="kpi hl"><div class="lbl">Ganancia neta</div><div class="val {{ 'pos' if t.neta >= 0 else 'neg' }}">{{ t.neta|cop }}</div><div class="sub">{% if t.margen is not none %}Margen neto {{ t.margen|num(1) }}%{% else %}Sin ingresos{% endif %} · bruta {{ t.bruta|cop }}</div></div>
 </div>
 
@@ -95,11 +95,10 @@
     {% for c, v in rep.gastos_cat %}
       <div class="sum-line"><span>{{ c }}</span><b>{{ v|cop }}</b></div>
     {% else %}<p class="hint">Sin gastos en el periodo.</p>{% endfor %}
-    <div class="sum-line" style="margin-top:8px;border-top:1px solid var(--line)"><span>Nómina (sin comisiones)</span><b>{{ t.nomina|cop }}</b></div>
-    <div class="sum-line"><span>Desgaste de herramientas</span><b>{{ t.equipos|cop }}</b></div>
+    <div class="sum-line" style="margin-top:8px;border-top:1px solid var(--line)"><span>Desgaste de herramientas</span><b>{{ t.equipos|cop }}</b></div>
   </div>
 </div>
-<p class="hint" style="margin-top:12px">El Excel trae: consolidado (con fórmulas y gráfico), por servicio, por técnico, por cliente, órdenes, venta de equipos, gastos, compras, nómina, cartera y la agenda de preventivos de los próximos 90 días.</p>
+<p class="hint" style="margin-top:12px">El Excel trae: consolidado (con fórmulas y gráfico), por servicio, por técnico, por cliente, órdenes, venta de equipos, gastos, compras, cartera y la agenda de preventivos de los próximos 90 días.</p>
 {% endblock %}
 {% block scripts %}
 <script src="{{ url_for('static', filename='vendor/chart.umd.js', v=STATIC_V) }}"></script>

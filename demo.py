@@ -1,6 +1,6 @@
 """Datos de ejemplo (solo para pruebas y capturas del manual; la app del cliente no los usa): una empresa de mantenimiento de aires en Cúcuta
 con 60 días de movimiento (clientes, equipos, órdenes, cotizaciones, ventas de equipos,
-compras, gastos, nómina y agenda de la próxima semana).
+compras, gastos y agenda de la próxima semana).
 
 Uso por consola en un computador de pruebas: python demo.py
 """
@@ -404,6 +404,8 @@ def cargar(empresa, admin):
     for mes in (dia0, dia0 + timedelta(days=30)):
         f = mes.date().replace(day=5)
         db.session.add_all([
+            Gasto(fecha=f.replace(day=15) if f.day < 15 else f, categoria="Sueldos y pagos a técnicos", valor=1750905,
+                  descripcion="Sueldo Andrés Rojas"),
             Gasto(fecha=f, categoria="Arriendo", valor=1200000, descripcion="Local y bodega"),
             Gasto(fecha=f, categoria="Internet / celular", valor=180000, descripcion="Planes de los técnicos"),
             Gasto(fecha=f.replace(day=12), categoria="Publicidad", valor=150000, descripcion="Campaña Facebook e Instagram"),
@@ -413,16 +415,6 @@ def cargar(empresa, admin):
                          descripcion="Arnés, guantes y gafas"))
     db.session.flush()
 
-    # Nómina pagada de la quincena anterior (Carlos por comisión y Andrés mixto)
-    import nomina as nom
-    q_ini = (hoy - timedelta(days=30)).date().replace(day=1)
-    q_fin = q_ini.replace(day=15)
-    for emp in (carlos, andres):
-        try:
-            nom.registrar(emp, cfg, q_ini, q_fin, q_fin + timedelta(days=1), 15, usuario_id=admin.id,
-                          metodo="Transferencia")
-        except Exception:
-            db.session.rollback()
     db.session.commit()
     return n_ordenes
 

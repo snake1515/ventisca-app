@@ -252,8 +252,6 @@ def cambiar_estado(o, estado):
     if estado == "terminada":
         return terminar_orden(o)
     if o.estado == "terminada":
-        if o.nomina_id:
-            raise ErrorNegocio("La comisión de esta orden ya se pagó en nómina; anula esa nómina primero.")
         if sum(a.valor for a in o.abonos if not a.anulado) > 0.5:
             raise ErrorNegocio("La orden tiene abonos; anúlalos primero para reabrirla.")
         _revertir_inventario(o)
@@ -269,8 +267,6 @@ def cambiar_estado(o, estado):
 def anular_orden(o):
     if o.anulada:
         raise ErrorNegocio("Esta orden ya estaba anulada.")
-    if o.nomina_id:
-        raise ErrorNegocio("La comisión de esta orden ya se pagó en nómina; anula esa nómina primero.")
     _revertir_inventario(o)
     for a in o.abonos:
         a.anulado = True

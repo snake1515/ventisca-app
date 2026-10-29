@@ -25,13 +25,13 @@
 <div class="kpis">
   <div class="kpi"><div class="lbl">Ingresos del periodo</div><div class="val">{{ tot.ventas|cop }}</div></div>
   <div class="kpi"><div class="lbl">Costo de lo cobrado</div><div class="val">{{ tot.costo|cop }}</div><div class="sub">Materiales, comisiones, transporte y equipos vendidos</div></div>
-  <div class="kpi"><div class="lbl">Herramientas + gastos + nómina</div><div class="val">{{ (tot.equipos + tot.gastos)|cop }}</div><div class="sub"><a href="{{ url_for('activos') }}">Herramientas</a> {{ tot.equipos|cop }} · <a href="{{ url_for('gastos') }}">Gastos y nómina</a> {{ tot.gastos|cop }}</div></div>
-  <div class="kpi hl"><div class="lbl">Ganancia neta</div><div class="val {{ 'pos' if tot.neta >= 0 else 'neg' }}">{{ tot.neta|cop }}</div><div class="sub">Ganancia {{ tot.ganancia|cop }} − herramientas − gastos − nómina</div></div>
+  <div class="kpi"><div class="lbl">Herramientas + gastos</div><div class="val">{{ (tot.equipos + tot.gastos)|cop }}</div><div class="sub"><a href="{{ url_for('activos') }}">Herramientas</a> {{ tot.equipos|cop }} · <a href="{{ url_for('gastos') }}">Gastos</a> {{ tot.gastos|cop }}</div></div>
+  <div class="kpi hl"><div class="lbl">Ganancia neta</div><div class="val {{ 'pos' if tot.neta >= 0 else 'neg' }}">{{ tot.neta|cop }}</div><div class="sub">Ganancia {{ tot.ganancia|cop }} − herramientas − gastos</div></div>
 </div>
 
 <div class="bolsas">
   <div class="bolsa b-re"><div class="pct">Reinversión · {{ cfg.pct_reinversion|num(1) }}%</div><div class="val">{{ tot.reinversion|cop }}</div>
-    <div class="hint">{{ 'Además se separan ' ~ (tot.reponer|cop) ~ ' para reponer el costo y ' ~ ((tot.equipos + tot.gastos)|cop) ~ ' para herramientas, gastos y nómina' if cfg.base == 'ganancia' else 'Para materiales, nómina, herramientas y gastos' }}</div></div>
+    <div class="hint">{{ 'Además se separan ' ~ (tot.reponer|cop) ~ ' para reponer el costo y ' ~ ((tot.equipos + tot.gastos)|cop) ~ ' para herramientas y gastos' if cfg.base == 'ganancia' else 'Para materiales, herramientas y gastos' }}</div></div>
   <div class="bolsa b-du"><div class="pct">Para el dueño · {{ cfg.pct_dueno|num(1) }}%</div><div class="val">{{ tot.dueno|cop }}</div></div>
   <div class="bolsa b-em"><div class="pct">Fondo de emergencia · {{ cfg.pct_emergencia|num(1) }}%</div><div class="val">{{ tot.emergencia|cop }}</div></div>
 </div>
@@ -39,12 +39,12 @@
 {% if tot.faltante > 0.5 %}
 <div class="note warn" style="margin-bottom:16px">
   {% if cfg.base == 'ventas' %}
-  <b>Atención:</b> la reinversión ({{ tot.reinversion|cop }}) no alcanza a cubrir lo que costaron los servicios y equipos ({{ tot.costo|cop }}){% if tot.equipos + tot.gastos > 0.5 %} más herramientas, gastos y nómina ({{ (tot.equipos + tot.gastos)|cop }}){% endif %}.
+  <b>Atención:</b> la reinversión ({{ tot.reinversion|cop }}) no alcanza a cubrir lo que costaron los servicios y equipos ({{ tot.costo|cop }}){% if tot.equipos + tot.gastos > 0.5 %} más herramientas y gastos ({{ (tot.equipos + tot.gastos)|cop }}){% endif %}.
   Faltan <b>{{ tot.faltante|cop }}</b>. Con esta regla el negocio se descapitaliza.
   Opciones: subir el porcentaje de reinversión a mínimo <b>{{ (((tot.costo + tot.equipos + tot.gastos) / tot.ventas * 100) if tot.ventas else 0)|round(0, 'ceil')|int }}%</b>,
   subir precios, o <a href="{{ url_for('configuracion') }}">calcular la regla sobre la ganancia</a>.
   {% else %}
-  <b>Atención:</b> la ganancia del periodo no alcanza a cubrir herramientas, gastos y nómina. Faltan <b>{{ tot.faltante|cop }}</b>.
+  <b>Atención:</b> la ganancia del periodo no alcanza a cubrir herramientas y gastos. Faltan <b>{{ tot.faltante|cop }}</b>.
   {% endif %}
 </div>
 {% endif %}
@@ -53,7 +53,7 @@
   <div class="card-head"><h2>Día por día</h2>
     <small><span class="dot" style="background:var(--accent)"></span>Reinversión <span class="dot" style="background:var(--berry);margin-left:8px"></span>Dueño <span class="dot" style="background:var(--warn);margin-left:8px"></span>Emergencia</small></div>
   <div class="table-wrap"><table>
-    <thead><tr><th>Día</th><th class="num">Ingresos</th><th class="num">Costo</th><th class="num">Ganancia</th><th class="num">Herramientas</th><th class="num">Gastos + nómina</th>
+    <thead><tr><th>Día</th><th class="num">Ingresos</th><th class="num">Costo</th><th class="num">Ganancia</th><th class="num">Herramientas</th><th class="num">Gastos</th>
       <th class="num">Reinversión</th><th class="num">Dueño</th><th class="num">Emergencia</th><th></th></tr></thead>
     <tbody>
     {% for f in filas %}
@@ -75,8 +75,8 @@
       <td class="num">{{ tot.reinversion|cop }}</td><td class="num">{{ tot.dueno|cop }}</td><td class="num">{{ tot.emergencia|cop }}</td><td></td></tr></tfoot>{% endif %}
   </table></div>
   <p class="hint" style="margin-top:10px">
-  {% if cfg.base == 'ventas' %}Cada día se reparte el total cobrado. La reinversión debe cubrir el costo de lo cobrado, la reserva diaria para herramientas, los gastos y la nómina del día; la etiqueta amarilla indica cuánto faltó.
-  {% else %}Cada día primero se separa el costo de lo cobrado (para reponer), la reserva para herramientas, los gastos y la nómina del día; lo que queda de ganancia se reparte con la regla. Los días sin ventas también cargan la reserva de herramientas.{% endif %}
+  {% if cfg.base == 'ventas' %}Cada día se reparte el total cobrado. La reinversión debe cubrir el costo de lo cobrado, la reserva diaria para herramientasy los gastos del día; la etiqueta amarilla indica cuánto faltó.
+  {% else %}Cada día primero se separa el costo de lo cobrado (para reponer), la reserva para herramientasy los gastos del día; lo que queda de ganancia se reparte con la regla. Los días sin ventas también cargan la reserva de herramientas.{% endif %}
   </p>
 </div>
 {% endblock %}

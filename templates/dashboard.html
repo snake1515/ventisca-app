@@ -75,7 +75,6 @@
       <div class="sum-line"><span>Venta de equipos</span><b>{{ ventas_eq|cop }}</b></div>
       <div class="sum-line"><span>− Materiales, comisiones y transporte</span><b>{{ costo_serv|cop }}</b></div>
       <div class="sum-line"><span>− Costo de los equipos vendidos</span><b>{{ costo_eq|cop }}</b></div>
-      {% if nomina_gasto > 0.5 %}<div class="sum-line"><span>− Nómina (salarios y aportes)</span><b>{{ nomina_gasto|cop }}</b></div>{% endif %}
       {% for cat, v in gastos_det %}<div class="sum-line"><span>− {{ cat }}</span><b>{{ v|cop }}</b></div>{% endfor %}
       {% if depreciacion > 0.5 %}<div class="sum-line"><span>− Desgaste de herramientas</span><b>{{ depreciacion|cop }}</b></div>{% endif %}
       <div class="sum-total"><span>Ganancia neta</span><span class="{{ 'pos' if neta >= 0 else 'neg' }}">{{ neta|cop }}</span></div>
