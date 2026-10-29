@@ -1,0 +1,37 @@
+{% extends "base.html" %}
+{% block title %}Técnicos{% endblock %}
+{% block content %}
+<div class="page-head">
+  <div><h1>Técnicos</h1><p>Técnicos y ayudantes: cómo se les paga, cuántos servicios hacen y cuánta comisión tienen pendiente.</p></div>
+  <div class="actions">
+    <a class="btn sec" href="{{ url_for('empleados', ver='' if ver == 'todos' else 'todos') }}">{{ 'Solo activos' if ver == 'todos' else 'Ver retirados' }}</a>
+    <a class="btn sec" href="{{ url_for('nomina_nueva') }}">✉ Liquidar nómina</a>
+    <a class="btn" href="{{ url_for('empleado_form') }}">＋ Nuevo técnico</a>
+  </div>
+</div>
+<div class="kpis" style="grid-template-columns:repeat(3,minmax(0,1fr))">
+  <div class="kpi"><div class="lbl">Técnicos activos</div><div class="val">{{ items|selectattr('activo')|list|length }}</div></div>
+  <div class="kpi"><div class="lbl">Comisiones por pagar</div><div class="val">{{ total_pend|cop }}</div><div class="sub">Órdenes terminadas sin liquidar</div></div>
+  <div class="kpi hl"><div class="lbl">Servicios este mes</div><div class="val">{{ mes.values()|sum }}</div><div class="sub">órdenes terminadas</div></div>
+</div>
+<div class="card">
+  <div class="table-wrap"><table>
+    <thead><tr><th>Técnico</th><th>Forma de pago</th><th class="num">Salario</th><th>Comisión</th><th>Acceso a la app</th><th class="num">Servicios (mes)</th><th class="num">Comisión pendiente</th><th></th></tr></thead>
+    <tbody>
+    {% for e in items %}
+      <tr class="{{ 'anulada' if not e.activo }}">
+        <td><a href="{{ url_for('empleado_detalle', id=e.id) }}"><b>{{ e.nombre }}</b></a>{% if e.cargo %}<br><small>{{ e.cargo }}</small>{% endif %}</td>
+        <td>{{ e.tipo_nombre }}</td>
+        <td class="num">{{ e.salario|cop if e.salario else '—' }}</td>
+        <td>{{ e.comision_txt or '—' }}</td>
+        <td>{% if e.usuario %}<span class="badge ok">{{ e.usuario.username }}</span>{% else %}<span class="muted">Sin usuario</span>{% endif %}</td>
+        <td class="num">{{ mes.get(e.id) or 0 }}</td>
+        <td class="num"><b>{{ (pend.get(e.id) or 0)|cop }}</b></td>
+        <td class="r" style="white-space:nowrap">{% if e.whatsapp %}<a class="btn sec sm" href="{{ e.whatsapp }}" target="_blank">WhatsApp</a>{% endif %}
+          {% if e.activo %}<a class="btn sm" href="{{ url_for('nomina_nueva', empleado_id=e.id) }}">Liquidar</a>{% endif %}</td>
+      </tr>
+    {% else %}<tr><td colspan="8" class="empty">Aún no hay técnicos. Regístralos para asignarles órdenes y calcular sus comisiones.</td></tr>{% endfor %}
+    </tbody>
+  </table></div>
+</div>
+{% endblock %}

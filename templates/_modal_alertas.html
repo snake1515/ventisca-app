@@ -1,0 +1,63 @@
+{# Ventana emergente con los mantenimientos preventivos vencidos o por vencer. Requiere: alertas #}
+{% if alertas %}
+{% set n_eq = alertas|map(attribute='equipos')|map('length')|sum %}
+<div class="modal-fondo on" id="modalAlertas" role="dialog" aria-modal="true" aria-labelledby="mTitulo">
+  <div class="modal">
+    <div class="modal-head">
+      <div class="ico"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/></svg></div>
+      <div>
+        <h2 id="mTitulo">Mantenimientos preventivos pendientes</h2>
+        <div class="muted" style="font-size:.9rem">{{ alertas|length }} cliente{{ 's' if alertas|length != 1 }} · {{ n_eq }} equipo{{ 's' if n_eq != 1 }} vencidos o por vencer</div>
+      </div>
+      <button class="btn-close" type="button" data-cerrar aria-label="Cerrar">×</button>
+    </div>
+    <div class="modal-body">
+      {% for gr in alertas %}
+      {% set c = gr.cliente %}
+      <div class="alerta" data-cliente="{{ c.id }}">
+        <div class="top">
+          <div><a href="{{ url_for('cliente_detalle', id=c.id) }}"><b>{{ c.nombre }}</b></a>
+            <span class="muted" style="font-size:.85rem">{% if c.telefono %} · {{ c.telefono }}{% endif %}{% if c.barrio %} · {{ c.barrio }}{% endif %}</span></div>
+          {% if gr.dias < 0 %}<span class="badge err">Vencido hace {{ -gr.dias }} día{{ 's' if gr.dias != -1 }}</span>
+          {% elif gr.dias == 0 %}<span class="badge err">Vence hoy</span>
+          {% else %}<span class="badge warn">Vence en {{ gr.dias }} día{{ 's' if gr.dias != 1 }}</span>{% endif %}
+        </div>
+        <ul>
+          {% for x in gr.equipos %}<li>{{ x.e.nombre }} · tocaba el {{ x.e.proximo_preventivo|fecha }}</li>{% endfor %}
+        </ul>
+        <div class="acc">
+          <a class="btn sm" href="{{ url_for('orden_nueva', cliente=c.id, tipo='preventivo', equipo=gr.equipos|map(attribute='e.id')|list) }}">Agendar visita</a>
+          {% if gr.wa %}<a class="btn sm wa" href="{{ gr.wa }}" target="_blank" rel="noopener" data-avisar="{{ c.id }}">Recordar por WhatsApp</a>{% endif %}
+          <button class="btn sec sm" type="button" data-posponer="{{ c.id }}">Posponer 7 días</button>
+          {% if gr.avisado %}<span class="muted" style="font-size:.82rem;align-self:center">Avisado el {{ gr.avisado|fecha }}</span>{% endif %}
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+    <div class="modal-foot">
+      <a class="btn sec" href="{{ url_for('mantenimientos') }}">Ver todos los mantenimientos</a>
+      <button class="btn" type="button" data-cerrar>Entendido</button>
+    </div>
+  </div>
+</div>
+<script>
+  (() => {
+    const m = document.getElementById('modalAlertas');
+    const cerrar = () => { m.classList.remove('on'); postar('{{ url_for('mant_visto') }}'); };
+    m.querySelectorAll('[data-cerrar]').forEach(b => b.addEventListener('click', cerrar));
+    m.addEventListener('click', e => { if (e.target === m) cerrar(); });
+    document.addEventListener('keydown', e => { if (e.key === 'Escape' && m.classList.contains('on')) cerrar(); });
+    m.querySelectorAll('[data-avisar]').forEach(a => a.addEventListener('click', () => {
+      postar('{{ url_for('mant_avisado') }}', { cliente_id: a.dataset.avisar });
+      const s = document.createElement('span'); s.className = 'badge ok'; s.textContent = 'Avisado hoy'; s.style.alignSelf = 'center';
+      a.parentElement.appendChild(s);
+    }));
+    m.querySelectorAll('[data-posponer]').forEach(b => b.addEventListener('click', async () => {
+      b.disabled = true;
+      const r = await postar('{{ url_for('mant_posponer') }}', { cliente_id: b.dataset.posponer, dias: 7 });
+      if (r.ok) { const al = b.closest('.alerta'); al.style.opacity = .4; al.querySelector('.acc').innerHTML = '<span class="badge gray">Pospuesto 7 días</span>'; }
+      else b.disabled = false;
+    }));
+  })();
+</script>
+{% endif %}

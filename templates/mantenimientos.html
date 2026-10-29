@@ -1,0 +1,83 @@
+{% extends "base.html" %}
+{% block title %}Mantenimientos{% endblock %}
+{% block content %}
+<div class="page-head">
+  <div><h1>Mantenimientos preventivos</h1>
+    <p>Clientes con equipos vencidos o que se vencen en los próximos {{ cfg.dias_aviso }} días (lo cambias en <a href="{{ url_for('configuracion') }}">Configuración</a>).</p></div>
+</div>
+
+<div class="tabs">
+  <a href="{{ url_for('mantenimientos', ver='pendientes') }}" class="{{ 'on' if ver == 'pendientes' }}">Por agendar</a>
+  <a href="{{ url_for('mantenimientos', ver='agendados') }}" class="{{ 'on' if ver == 'agendados' }}">Ya agendados</a>
+  <a href="{{ url_for('mantenimientos', ver='30') }}" class="{{ 'on' if ver == '30' }}">Próximos 30 días</a>
+  <a href="{{ url_for('mantenimientos', ver='60') }}" class="{{ 'on' if ver == '60' }}">60 días</a>
+  <a href="{{ url_for('mantenimientos', ver='90') }}" class="{{ 'on' if ver == '90' }}">90 días</a>
+</div>
+
+<div class="kpis" style="grid-template-columns:repeat(3,minmax(0,1fr))">
+  <div class="kpi"><div class="lbl">Clientes en la lista</div><div class="val">{{ grupos|length }}</div></div>
+  <div class="kpi"><div class="lbl">Equipos</div><div class="val">{{ n_equipos }}</div></div>
+  <div class="kpi"><div class="lbl">Vencidos</div><div class="val {{ 'neg' if vencidos }}">{{ vencidos }}</div></div>
+</div>
+
+<div class="card">
+  {% if grupos %}
+  {% for gr in grupos %}
+  {% set c = gr.cliente %}
+  <div class="alerta" data-cliente="{{ c.id }}">
+    <div class="top">
+      <div><a href="{{ url_for('cliente_detalle', id=c.id) }}"><b>{{ c.nombre }}</b></a>
+        <span class="muted" style="font-size:.86rem">{% if c.telefono %} · {{ c.telefono }}{% endif %}{% if c.direccion_completa %} · {{ c.direccion_completa }}{% endif %}</span></div>
+      <div style="display:flex;gap:6px;flex-wrap:wrap">
+        {% if gr.agendado %}<a class="badge info" href="{{ url_for('orden_detalle', id=gr.agendado.id) }}">Agendado {{ gr.agendado.fecha|dia|lower }} {{ gr.agendado.fecha|hora }}</a>{% endif %}
+        {% if gr.pospuesto %}<span class="badge gray">Pospuesto hasta {{ gr.pospuesto|fecha }}</span>{% endif %}
+        {% if gr.dias < 0 %}<span class="badge err">Vencido hace {{ -gr.dias }} día{{ 's' if gr.dias != -1 }}</span>
+        {% elif gr.dias == 0 %}<span class="badge err">Vence hoy</span>
+        {% else %}<span class="badge warn">En {{ gr.dias }} día{{ 's' if gr.dias != 1 }}</span>{% endif %}
+      </div>
+    </div>
+    <ul>
+      {% for x in gr.equipos %}<li><a href="{{ url_for('equipo_detalle', id=x.e.id) }}">{{ x.e.nombre }}</a> · próximo {{ x.e.proximo_preventivo|fecha }}{% if x.e.ultimo_preventivo %} · último {{ x.e.ultimo_preventivo|fecha }}{% endif %}</li>{% endfor %}
+    </ul>
+    {% if not gr.agendado %}
+    <div class="acc">
+      <a class="btn sm" href="{{ url_for('orden_nueva', cliente=c.id, tipo='preventivo', equipo=gr.equipos|map(attribute='e.id')|list) }}">Agendar visita</a>
+      {% if gr.wa %}<a class="btn sm wa" href="{{ gr.wa }}" target="_blank" rel="noopener" data-avisar="{{ c.id }}">Recordar por WhatsApp</a>{% else %}<span class="muted" style="font-size:.85rem;align-self:center">Sin celular registrado</span>{% endif %}
+      <form method="post" action="{{ url_for('mant_posponer') }}" style="display:inline-flex;gap:6px">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="cliente_id" value="{{ c.id }}">
+        <input type="hidden" name="volver" value="{{ request.full_path }}">
+        <select class="input" name="dias" style="width:auto;padding:5px 8px"><option value="7">7 días</option><option value="15">15 días</option><option value="30">30 días</option></select>
+        <button class="btn sec sm">Posponer</button>
+      </form>
+      {% if gr.avisado %}<span class="badge ok" style="align-self:center">Avisado el {{ gr.avisado|fecha }}</span>{% endif %}
+    </div>
+    {% endif %}
+  </div>
+  {% endfor %}
+  {% else %}
+  <div class="ok-box">✔ {% if ver == 'agendados' %}No hay mantenimientos agendados pendientes.{% else %}Todo al día: no hay equipos por agendar en este rango.{% endif %}</div>
+  {% endif %}
+</div>
+
+{% if sin_fecha %}
+<div class="card">
+  <div class="card-head"><h2>Equipos con plan pero sin fecha ({{ sin_fecha|length }})</h2></div>
+  <p class="muted" style="margin-top:0">Registra la fecha del último mantenimiento o de instalación para que la app calcule el próximo.</p>
+  <div class="list">
+  {% for e in sin_fecha %}
+    <div class="list-item"><div class="grow"><div class="t">{{ e.cliente.nombre }}</div><div class="s">{{ e.nombre }}</div></div>
+      <a class="btn sec sm" href="{{ url_for('equipo_form', id=e.id) }}">Poner fecha</a></div>
+  {% endfor %}
+  </div>
+</div>
+{% endif %}
+{% endblock %}
+{% block scripts %}
+<script>
+  document.querySelectorAll('[data-avisar]').forEach(a => a.addEventListener('click', () => {
+    postar('{{ url_for('mant_avisado') }}', { cliente_id: a.dataset.avisar });
+    const s = document.createElement('span'); s.className = 'badge ok'; s.textContent = 'Avisado hoy'; s.style.alignSelf = 'center';
+    a.parentElement.appendChild(s);
+  }));
+</script>
+{% endblock %}

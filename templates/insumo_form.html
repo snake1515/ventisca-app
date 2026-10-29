@@ -1,0 +1,42 @@
+{% extends "base.html" %}
+{% block title %}{{ 'Editar' if ins else 'Nuevo' }} material{% endblock %}
+{% block content %}
+{% set F = request.form %}
+<div class="page-head"><div><h1>{{ 'Editar material' if ins else 'Nuevo material o repuesto' }}</h1>
+  <p>{{ 'El stock y el costo cambian solos con las compras y las órdenes terminadas.' if ins else 'Ej: gas R-410A (kilogramo), tubería de cobre 3/8 (metro), capacitor 35+5 µF (unidad).' }}</p></div></div>
+<form method="post" style="max-width:820px">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+  <div class="card">
+    <div class="form-row">
+      <div class="field"><label>Nombre</label><input class="input" name="nombre" value="{{ F.nombre or (ins.nombre if ins) or '' }}" placeholder="Ej: Gas refrigerante R-410A" required></div>
+      <div class="field"><label>Unidad de medida</label><select class="input" name="unidad">
+        {% set sel = F.unidad or (ins.unidad if ins else 'unidad') %}{% for u in unidades %}<option {{ 'selected' if u == sel }}>{{ u }}</option>{% endfor %}</select></div>
+    </div>
+    <div class="form-row">
+      <div class="field"><label>Categoría</label><select class="input" name="categoria">
+        {% set sc = F.categoria or (ins.categoria if ins else '') %}{% for c in categorias %}<option {{ 'selected' if c == sc }}>{{ c }}</option>{% endfor %}</select></div>
+      <div class="field"><label>Precio al cliente (por unidad)</label><input class="input" name="precio_venta" inputmode="numeric" value="{{ F.precio_venta or ((ins.precio_venta|round|int) if ins and ins.precio_venta else '') }}" placeholder="0 = no se cobra aparte"><div class="hint">Se sugiere al agregarlo a una orden.</div></div>
+      <div class="field"><label>Stock mínimo (alerta)</label><input class="input" name="stock_minimo" inputmode="decimal" value="{{ F.stock_minimo or ((ins.stock_minimo|num(3)) if ins else '') }}"></div>
+    </div>
+  </div>
+  {% if not ins %}
+  <div class="card">
+    <div class="note" style="margin-bottom:14px"><b>Inventario inicial (opcional).</b> Si ya lo tienes en bodega, escribe la cantidad, lo que te costó en total y la fecha.</div>
+    <div class="form-row">
+      <div class="field"><label>Cantidad que tienes</label><input class="input" name="cantidad_inicial" inputmode="decimal" value="{{ F.cantidad_inicial }}"></div>
+      <div class="field"><label>Costo total ($)</label><input class="input" name="costo_inicial" inputmode="numeric" value="{{ F.costo_inicial }}"></div>
+      <div class="field"><label>Fecha de compra</label><input class="input" type="date" name="fecha_inicial" max="{{ hoy }}" value="{{ F.fecha_inicial or hoy }}"></div>
+    </div>
+  </div>
+  {% else %}
+  <div class="card">
+    <div class="note" style="margin-bottom:14px">Stock actual: <b>{{ ins.stock|num(3) }} {{ ins.unidad }}</b> · costo promedio <b>{{ ins.costo_promedio|cop }}</b> por {{ ins.unidad }}.</div>
+    {% if puede('admin') %}
+    <div class="field" style="max-width:320px;margin:0"><label>Conteo físico (opcional)</label><input class="input" name="conteo" inputmode="decimal" placeholder="Lo que hay realmente en bodega">
+      <div class="hint">Si es menos de lo que dice la app, la diferencia queda como gasto «Pérdidas de inventario».</div></div>
+    {% endif %}
+  </div>
+  {% endif %}
+  <div class="actions"><button class="btn">Guardar</button><a class="btn sec" href="{{ url_for('insumos') }}">Cancelar</a></div>
+</form>
+{% endblock %}

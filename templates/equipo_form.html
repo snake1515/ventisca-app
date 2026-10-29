@@ -1,0 +1,54 @@
+{% extends "base.html" %}
+{% block title %}{{ 'Editar equipo' if e else 'Nuevo equipo' }}{% endblock %}
+{% block content %}
+{% set F = request.form %}
+<div class="page-head"><div><h1>{{ 'Editar equipo' if e else 'Agregar equipo' }}</h1><p>Cliente: <a href="{{ url_for('cliente_detalle', id=cli.id) }}"><b>{{ cli.nombre }}</b></a></p></div></div>
+<div class="card" style="max-width:820px">
+  <form method="post">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <div class="form-row">
+      <div class="field"><label>Tipo de equipo</label><select class="input" name="tipo">
+        {% set sel = F.tipo or (e.tipo if e else tipos[0]) %}{% for t in tipos %}<option {{ 'selected' if t == sel }}>{{ t }}</option>{% endfor %}</select></div>
+      <div class="field"><label>Capacidad (BTU)</label><input class="input" name="capacidad_btu" list="btus" inputmode="numeric" value="{{ F.capacidad_btu or (e.capacidad_btu or '' if e else '') }}" placeholder="Ej: 12000">
+        <datalist id="btus">{% for b in capacidades %}<option value="{{ b }}">{% endfor %}</datalist></div>
+      <div class="field"><label>Marca</label><input class="input" name="marca" list="marcas" value="{{ F.marca or (e.marca or '' if e else '') }}" placeholder="Ej: LG">
+        <datalist id="marcas">{% for m in ('LG', 'Samsung', 'Midea', 'Hisense', 'Carrier', 'Daikin', 'Gree', 'Whirlpool', 'Electrolux', 'Panasonic', 'York', 'Trane', 'TCL', 'Challenger', 'Haceb') %}<option value="{{ m }}">{% endfor %}</datalist></div>
+    </div>
+    <div class="form-row">
+      <div class="field"><label>Ubicación</label><input class="input" name="ubicacion" value="{{ F.ubicacion or (e.ubicacion or '' if e else '') }}" placeholder="Ej: Alcoba principal, oficina 2"></div>
+      <div class="field"><label>Modelo</label><input class="input" name="modelo" value="{{ F.modelo or (e.modelo or '' if e else '') }}" placeholder="Opcional"></div>
+      <div class="field"><label>Refrigerante</label><select class="input" name="refrigerante"><option value="">No sé</option>
+        {% set sr = F.refrigerante or (e.refrigerante if e else '') %}{% for r in refrigerantes %}<option {{ 'selected' if r == sr }}>{{ r }}</option>{% endfor %}</select></div>
+    </div>
+    <div class="form-row">
+      <div class="field"><label>Serial</label><input class="input" name="serial" value="{{ F.serial or (e.serial or '' if e else '') }}" placeholder="Opcional"></div>
+      <div class="field" style="display:flex;align-items:flex-end"><label class="check"><input type="checkbox" name="inverter" value="1" {{ 'checked' if (F.inverter if F else (e.inverter if e else False)) }}> Es inverter</label></div>
+      {% if not e %}<div class="field"><label>¿Cuántos iguales?</label><input class="input" type="number" min="1" max="30" name="cantidad" value="{{ F.cantidad or 1 }}"><div class="hint">Ej: 6 habitaciones con el mismo aire. Se numeran solos.</div></div>{% endif %}
+    </div>
+
+    <h3 style="margin:10px 0 10px">Plan de mantenimiento preventivo</h3>
+    <div class="form-row">
+      <div class="field"><label>Frecuencia</label><select class="input" name="frecuencia_meses">
+        {% set sf = (F.frecuencia_meses|int) if F.frecuencia_meses else (e.frecuencia_meses if e else frec_def) %}
+        <option value="0" {{ 'selected' if sf == 0 }}>Sin plan (no avisar)</option>
+        {% for k, v in frecuencias.items() %}<option value="{{ k }}" {{ 'selected' if sf == k }}>{{ v }}</option>{% endfor %}</select>
+        <div class="hint">Comercios y clínicas: cada 3 meses. Hogares: cada 6.</div></div>
+      <div class="field"><label>Último mantenimiento (antes de la app)</label><input class="input" type="date" name="ultimo_manual" max="{{ hoy }}" value="{{ F.ultimo_manual or (e.ultimo_manual.isoformat() if e and e.ultimo_manual else '') }}">
+        <div class="hint">Desde ahí se calcula el próximo. Después se actualiza solo con cada orden.</div></div>
+      <div class="field"><label>Fecha de instalación</label><input class="input" type="date" name="fecha_instalacion" max="{{ hoy }}" value="{{ F.fecha_instalacion or (e.fecha_instalacion.isoformat() if e and e.fecha_instalacion else '') }}"></div>
+    </div>
+    {% if e and e.ultimo_preventivo %}<div class="note" style="margin-bottom:14px">Último preventivo registrado: <b>{{ e.ultimo_preventivo|fecha }}</b> · próximo: <b>{{ e.proximo_preventivo|fecha if e.proximo_preventivo else '—' }}</b>.</div>{% endif %}
+    <div class="field"><label>Nota</label><input class="input" name="nota" value="{{ F.nota or (e.nota or '' if e else '') }}" placeholder="Ej: condensadora en la terraza, se necesita escalera"></div>
+    <div class="actions">
+      <button class="btn">Guardar</button>
+      {% if not e %}<button class="btn sec" name="otro" value="1">Guardar y agregar otro</button>{% endif %}
+      <a class="btn sec" href="{{ url_for('cliente_detalle', id=cli.id) }}">Cancelar</a>
+    </div>
+  </form>
+</div>
+{% if e %}
+<form method="post" action="{{ url_for('equipo_retirar', id=e.id) }}" style="margin-top:16px" onsubmit="return confirm('{{ '¿Retirar este equipo? Deja de generar alertas; su historial se conserva.' if e.activo else '¿Reactivar este equipo?' }}')">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><button class="btn {{ 'danger' if e.activo else 'sec' }} sm">{{ 'Retirar equipo (lo cambiaron o se dañó)' if e.activo else 'Reactivar equipo' }}</button>
+</form>
+{% endif %}
+{% endblock %}

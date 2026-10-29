@@ -1,0 +1,50 @@
+{% extends "base.html" %}
+{% block title %}Datos del negocio{% endblock %}
+{% block content %}
+<div class="page-head"><div><h1>Datos del negocio</h1><p>Lo que aparece en órdenes de servicio, cotizaciones, recibos y desprendibles de nómina.</p></div></div>
+<div class="grid g-main">
+  <div class="card">
+    <form method="post" enctype="multipart/form-data">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <div class="field"><label>Logo</label>
+        <div style="display:flex;gap:14px;align-items:center;flex-wrap:wrap">
+          <img src="{{ url_for('logo', v=neg.logo_v) }}" alt="Logo" style="width:72px;height:72px;object-fit:cover;border-radius:12px;border:1px solid var(--line)">
+          <div style="flex:1;min-width:200px"><input class="input" type="file" name="logo" accept="image/png,image/jpeg,image/webp">
+            <div class="hint">JPG o PNG. Sale en el menú, órdenes, cotizaciones y recibos.{% if neg.logo %} <label class="check" style="display:inline-flex;margin:0 0 0 8px;font-weight:600"><input type="checkbox" name="quitar_logo" value="1"> Quitar logo</label>{% endif %}</div></div>
+        </div></div>
+      <div class="field"><label>Nombre del negocio</label><input class="input" name="nombre" value="{{ neg.nombre or '' }}" required></div>
+      <div class="form-row">
+        <div class="field"><label>NIT o cédula</label><input class="input" name="nit" value="{{ neg.nit or '' }}" placeholder="Opcional"></div>
+        <div class="field"><label>Teléfono / WhatsApp</label><input class="input" name="telefono" value="{{ neg.telefono or '' }}" placeholder="Opcional"></div>
+      </div>
+      <div class="form-row">
+        <div class="field"><label>Dirección</label><input class="input" name="direccion" value="{{ neg.direccion or '' }}" placeholder="Opcional"></div>
+        <div class="field"><label>Ciudad</label><input class="input" name="ciudad" value="{{ neg.ciudad or '' }}" placeholder="Opcional"></div>
+      </div>
+      <div class="form-row">
+        <div class="field"><label>Correo</label><input class="input" type="email" name="email" value="{{ neg.email or '' }}" placeholder="Opcional"></div>
+        <div class="field"><label>Régimen</label><input class="input" name="regimen" value="{{ neg.regimen or '' }}" placeholder="Ej: No responsable de IVA"></div>
+      </div>
+      <div class="form-row">
+        <div class="field"><label>Título del documento</label><input class="input" name="titulo_doc" list="titulos" value="{{ neg.titulo_doc or 'Orden de servicio' }}">
+          <datalist id="titulos"><option value="Orden de servicio"><option value="Reporte técnico"><option value="Cuenta de cobro"><option value="Recibo de pago"></datalist></div>
+        <div class="field"><label>Prefijo de numeración</label><input class="input" name="prefijo" maxlength="8" value="{{ neg.prefijo or 'OS' }}"><div class="hint">Ej: OS-00123</div></div>
+        <div class="field"><label>IVA por defecto (%)</label><input class="input" type="number" step="any" min="0" max="100" name="iva_pct" value="{{ '%g'|format(neg.iva_pct or 0) }}"><div class="hint">0 si no eres responsable de IVA</div></div>
+      </div>
+      <div class="note" style="margin-bottom:14px">Estos documentos son soporte del servicio para el cliente; <b>no reemplazan la factura electrónica DIAN</b> cuando estés obligado a expedirla.</div>
+      <div class="field"><label>Mensaje al pie</label><input class="input" name="mensaje" value="{{ neg.mensaje or '' }}" placeholder="Ej: ¡Gracias por confiar en nosotros!"></div>
+      <div class="field"><label>Condiciones de las cotizaciones</label><textarea class="input" name="condiciones_cot" rows="3" placeholder="Ej: Forma de pago: 50% para iniciar y 50% al terminar. Garantía de 30 días sobre la mano de obra.">{{ neg.condiciones_cot or '' }}</textarea></div>
+      <button class="btn">Guardar</button>
+    </form>
+  </div>
+  <div class="card summary">
+    <h2>Vista previa</h2>
+    {% if ultima %}
+      <p class="hint">Así se ve con la última orden ({{ num_orden(ultima) }}). Guarda primero para ver los cambios.</p>
+      <img src="{{ url_for('orden_documento', id=ultima.id, fmt='jpg') }}?v={{ range(100000)|random }}" alt="Vista previa del recibo" style="width:100%;border:1px solid var(--line);border-radius:10px;margin-top:8px">
+    {% else %}
+      <p class="hint">Cuando termines la primera orden verás aquí cómo queda el documento.</p>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}

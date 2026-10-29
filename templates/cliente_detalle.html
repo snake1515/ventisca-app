@@ -1,0 +1,114 @@
+{% extends "base.html" %}
+{% block title %}{{ c.nombre }}{% endblock %}
+{% block content %}
+<div class="page-head">
+  <div><h1>{{ c.nombre }}</h1>
+    <p>{{ c.tipo }}{% if c.contacto %} · {{ c.contacto }}{% endif %}{% if c.telefono %} · {{ c.telefono }}{% endif %}{% if c.direccion_completa %} · {{ c.direccion_completa }}{% endif %}</p></div>
+  <div class="actions">
+    {% if c.whatsapp %}<a class="btn wa" href="{{ c.whatsapp }}" target="_blank" rel="noopener">WhatsApp</a>{% endif %}
+    <a class="btn" href="{{ url_for('orden_nueva', cliente=c.id) }}">＋ Orden de servicio</a>
+    <a class="btn sec" href="{{ url_for('cotizacion_form', cliente=c.id) }}">Cotizar</a>
+    <a class="btn sec" href="{{ url_for('cliente_form', id=c.id) }}">Editar</a>
+  </div>
+</div>
+
+{% if por_vencer %}
+<div class="gar-box" style="display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;align-items:center">
+  <span>❄ <b>{{ por_vencer|length }} equipo{{ 's' if por_vencer|length != 1 }}</b> con preventivo vencido o por vencer.</span>
+  <span class="actions">
+    <a class="btn sm" href="{{ url_for('orden_nueva', cliente=c.id, tipo='preventivo', equipo=por_vencer|map(attribute='id')|list) }}">Agendar preventivo</a>
+    {% if wa_mant %}<a class="btn sm wa" href="{{ wa_mant }}" target="_blank" rel="noopener" data-avisar="{{ c.id }}">Recordar por WhatsApp</a>{% endif %}
+  </span>
+</div>
+{% endif %}
+
+<div class="kpis">
+  <div class="kpi"><div class="lbl">Equipos</div><div class="val">{{ equipos|length }}</div></div>
+  <div class="kpi"><div class="lbl">Servicios hechos</div><div class="val">{{ n_hechas }}</div></div>
+  <div class="kpi"><div class="lbl">Total facturado</div><div class="val">{{ total_hist|cop }}</div><div class="sub">servicios y equipos</div></div>
+  <div class="kpi"><div class="lbl">Saldo pendiente</div><div class="val {{ 'neg' if saldo > 0.5 }}">{{ saldo|cop }}</div>{% if wa_cobro %}<div class="sub"><a href="{{ wa_cobro }}" target="_blank" rel="noopener">Recordar pago</a></div>{% endif %}</div>
+</div>
+
+<div class="grid g-main">
+<div>
+  <div class="card">
+    <div class="card-head"><h2>Equipos</h2><a class="btn sec sm" href="{{ url_for('equipo_form', cliente_id=c.id) }}">＋ Agregar equipo</a></div>
+    {% for x in equipos %}{% set e = x.e %}
+    <div class="equipo-card">
+      <div class="equipo-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><rect x="2" y="5" width="20" height="9" rx="2"/><path d="M6 11h12M7 18l1-2M12 19v-3M17 18l-1-2"/></svg></div>
+      <div style="flex:1;min-width:0">
+        <div style="display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap">
+          <a href="{{ url_for('equipo_detalle', id=e.id) }}"><b>{{ e.nombre }}</b></a>
+          <span><span class="badge {{ x.est[2] }}">{{ x.est[1] }}</span>{% if x.gar %} <span class="badge warn">Garantía hasta {{ x.gar.garantia_hasta|fecha }}</span>{% endif %}</span>
+        </div>
+        <div class="muted" style="font-size:.86rem">{{ [e.modelo, e.refrigerante, 'Inverter' if e.inverter else None]|select|join(' · ') }}</div>
+        <div style="font-size:.88rem;margin-top:3px">
+          {% if e.con_plan %}Preventivo {{ e.frecuencia_meses }} meses ·
+            {% if e.proximo_preventivo %}próximo <b>{{ e.proximo_preventivo|fecha }}</b>{% else %}<a href="{{ url_for('equipo_form', id=e.id) }}">poner fecha del último</a>{% endif %}
+            {% if e.ultimo_preventivo %} · último {{ e.ultimo_preventivo|fecha }}{% endif %}
+          {% else %}<span class="muted">Sin plan de mantenimiento</span>{% endif %}
+          {% if x.agendado %} · <a class="badge info" href="{{ url_for('orden_detalle', id=x.agendado.id) }}">Agendado {{ x.agendado.fecha|dia|lower }}</a>{% endif %}
+        </div>
+      </div>
+    </div>
+    {% else %}
+    <div class="empty">Este cliente aún no tiene equipos. <a href="{{ url_for('equipo_form', cliente_id=c.id) }}">Agrega el primero</a> para llevar su plan de mantenimiento.</div>
+    {% endfor %}
+    {% if retirados %}<p class="muted" style="font-size:.85rem;margin:12px 0 0">Retirados: {% for e in retirados %}<a href="{{ url_for('equipo_detalle', id=e.id) }}">{{ e.corto }}</a>{{ ', ' if not loop.last }}{% endfor %}</p>{% endif %}
+  </div>
+
+  <div class="card">
+    <div class="card-head"><h2>Historial de servicios</h2></div>
+    <div class="table-wrap"><table>
+      <thead><tr><th>Orden</th><th>Fecha</th><th>Servicio</th><th>Técnico</th><th class="num">Total</th><th>Estado</th></tr></thead>
+      <tbody>
+      {% for o in ordenes %}
+        <tr class="{{ 'anulada' if o.anulada }}"><td><a href="{{ url_for('orden_detalle', id=o.id) }}"><b>{{ num_orden(o) }}</b></a></td>
+          <td>{{ (o.fecha_fin or o.fecha)|fecha }}</td><td>{{ o.tipo_txt }}{% if o.en_garantia %} <span class="badge warn">garantía</span>{% endif %}</td>
+          <td>{{ o.tecnico.nombre if o.tecnico else '—' }}</td><td class="num">{{ o.total_factura|cop }}</td>
+          <td><span class="badge {{ o.estado_info[1] }}">{{ o.estado_info[0] }}</span></td></tr>
+      {% else %}<tr><td colspan="6" class="empty">Sin servicios todavía.</td></tr>{% endfor %}
+      </tbody>
+    </table></div>
+  </div>
+</div>
+
+<div>
+  {% if pendientes %}
+  <div class="card">
+    <h2 style="margin-bottom:8px">Pendiente por cobrar</h2>
+    {% for x in pendientes %}
+    <div class="sum-line"><span>{% if x.__tablename__ == 'vt_ordenes' %}<a href="{{ url_for('orden_detalle', id=x.id) }}">{{ num_orden(x) }}</a>{% else %}<a href="{{ url_for('venta_equipo_detalle', id=x.id) }}">{{ x.numero }}</a>{% endif %}
+      {% if x.vence %}<span class="muted" style="font-size:.82rem"> · vence {{ x.vence|fecha }}</span>{% endif %}</span><b class="{{ 'neg' if x.vencida }}">{{ x.saldo|cop }}</b></div>
+    {% endfor %}
+  </div>
+  {% endif %}
+  <div class="card">
+    <div class="card-head"><h2>Cotizaciones</h2><a class="btn sec sm" href="{{ url_for('cotizacion_form', cliente=c.id) }}">＋ Cotizar</a></div>
+    {% for q in cots %}
+    <div class="sum-line"><span><a href="{{ url_for('cotizacion_detalle', id=q.id) }}">{{ q.numero }}</a> <span class="muted" style="font-size:.82rem">{{ q.fecha|fecha }}</span></span>
+      <span><span class="badge {{ q.estado_info[1] }}">{{ q.estado_info[0] }}</span> <b>{{ q.total_factura|cop }}</b></span></div>
+    {% else %}<div class="muted">Sin cotizaciones.</div>{% endfor %}
+  </div>
+  <div class="card">
+    <div class="card-head"><h2>Equipos comprados</h2><a class="btn sec sm" href="{{ url_for('venta_equipo_form', cliente=c.id) }}">＋ Venta</a></div>
+    {% for v in ves %}
+    <div class="sum-line {{ 'muted' if v.anulada }}"><span><a href="{{ url_for('venta_equipo_detalle', id=v.id) }}">{{ v.numero }}</a> · {{ v.descripcion }}</span><b>{{ v.total_factura|cop }}</b></div>
+    {% else %}<div class="muted">No le ha comprado equipos.</div>{% endfor %}
+  </div>
+  {% if c.nota or c.email or c.identificacion %}
+  <div class="card"><dl class="kv">
+    {% if c.identificacion %}<dt>C.C./NIT</dt><dd>{{ c.identificacion }}</dd>{% endif %}
+    {% if c.email %}<dt>Correo</dt><dd>{{ c.email }}</dd>{% endif %}
+    {% if c.plazo_dias %}<dt>Crédito</dt><dd>{{ c.plazo_dias }} días</dd>{% endif %}
+    {% if c.nota %}<dt>Nota</dt><dd>{{ c.nota }}</dd>{% endif %}
+  </dl></div>
+  {% endif %}
+</div>
+</div>
+{% endblock %}
+{% block scripts %}
+<script>
+  document.querySelectorAll('[data-avisar]').forEach(a => a.addEventListener('click', () => postar('{{ url_for('mant_avisado') }}', { cliente_id: a.dataset.avisar })));
+</script>
+{% endblock %}

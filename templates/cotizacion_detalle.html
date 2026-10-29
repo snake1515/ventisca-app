@@ -1,0 +1,53 @@
+{% extends "base.html" %}
+{% block title %}Cotización {{ c.numero }}{% endblock %}
+{% block content %}
+<div class="page-head">
+  <div><h1>Cotización {{ c.numero }} <span class="badge {{ c.estado_info[1] }}" style="vertical-align:middle">{{ c.estado_info[0] }}</span></h1>
+    <p>{{ c.cliente_nombre }} · {{ c.tipo_txt }} · {{ c.fecha|fecha }} · válida hasta {{ c.valida_hasta|fecha }}</p></div>
+  <div class="actions">
+    {% if wa %}<a class="btn wa" href="{{ wa }}" target="_blank" rel="noopener">Enviar por WhatsApp</a>{% endif %}
+    <a class="btn sec" href="{{ url_for('cotizacion_documento', id=c.id, fmt='pdf') }}" target="_blank">PDF</a>
+    <a class="btn sec" href="{{ url_for('cotizacion_documento', id=c.id, fmt='jpg') }}" target="_blank">Imagen</a>
+    {% if not c.orden_id %}<a class="btn sec" href="{{ url_for('cotizacion_form', id=c.id) }}">Editar</a>{% endif %}
+  </div>
+</div>
+<div class="grid g-main">
+  <div>
+    <div class="card">
+      <div class="table-wrap"><table>
+        <thead><tr><th>Concepto</th><th class="num">Cant.</th><th class="num">Valor</th><th class="num">Subtotal</th></tr></thead>
+        <tbody>{% for l in c.lineas %}<tr><td>{{ l.descripcion }}{% if l.insumo %} <span class="badge gray">material</span>{% endif %}{% if l.equipo %}<div class="muted" style="font-size:.82rem">{{ l.equipo.nombre }}</div>{% endif %}</td>
+          <td class="num">{{ l.cantidad|num(3) }}</td><td class="num">{{ l.precio|cop }}</td><td class="num"><b>{{ l.subtotal|cop }}</b></td></tr>{% endfor %}</tbody>
+        <tfoot>
+          {% if c.descuento %}<tr><td colspan="3">Descuento</td><td class="num">-{{ c.descuento|cop }}</td></tr>{% endif %}
+          {% if c.iva %}<tr><td colspan="3">IVA {{ c.iva_pct|num }}%</td><td class="num">{{ c.iva|cop }}</td></tr>{% endif %}
+          <tr><td colspan="3">Total</td><td class="num">{{ c.total_factura|cop }}</td></tr>
+        </tfoot>
+      </table></div>
+    </div>
+    {% if c.descripcion or c.nota %}<div class="card">
+      {% if c.descripcion %}<h3>Descripción</h3><p class="texto">{{ c.descripcion }}</p>{% endif %}
+      {% if c.nota %}<h3>Observaciones</h3><p class="texto">{{ c.nota }}</p>{% endif %}
+    </div>{% endif %}
+  </div>
+  <div>
+    <div class="card summary">
+      <div class="big-num">{{ c.total_factura|cop }}</div>
+      {% if c.orden_id %}
+        <div class="ok-box" style="margin-top:12px">✔ Convertida en la orden <a href="{{ url_for('orden_detalle', id=c.orden_id) }}"><b>{{ num_orden(c.orden) }}</b></a>.</div>
+      {% else %}
+        <p class="muted">¿El cliente aprobó?</p>
+        <a class="btn block" href="{{ url_for('orden_nueva', cotizacion=c.id) }}">✔ Aprobada: crear orden de servicio</a>
+        <div class="actions" style="margin-top:10px">
+          {% for est, txt in (('aprobada', 'Marcar aprobada'), ('rechazada', 'Rechazada'), ('pendiente', 'Pendiente')) if c.estado != est %}
+          <form method="post" action="{{ url_for('cotizacion_estado', id=c.id) }}"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="estado" value="{{ est }}"><button class="btn sec sm">{{ txt }}</button></form>
+          {% endfor %}
+          {% if puede('admin') %}<form method="post" action="{{ url_for('cotizacion_eliminar', id=c.id) }}" onsubmit="return confirm('¿Eliminar la cotización?')"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><button class="btn danger sm">Eliminar</button></form>{% endif %}
+        </div>
+      {% endif %}
+      {% if c.cliente %}<p style="margin-top:14px"><a href="{{ url_for('cliente_detalle', id=c.cliente_id) }}">Ver ficha del cliente</a></p>{% endif %}
+      <p class="muted" style="font-size:.8rem">Elaboró {{ c.usuario.nombre if c.usuario else '—' }}.</p>
+    </div>
+  </div>
+</div>
+{% endblock %}

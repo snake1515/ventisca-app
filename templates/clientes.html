@@ -1,0 +1,38 @@
+{% extends "base.html" %}
+{% block title %}Clientes{% endblock %}
+{% block content %}
+<div class="page-head">
+  <div><h1>Clientes y equipos</h1><p>{{ total }} clientes · {{ n_equipos }} equipos con su plan de mantenimiento</p></div>
+  <div class="actions">
+    <form class="filters" method="get"><input type="hidden" name="f" value="{{ f }}">
+      <div class="field"><input class="input" name="q" value="{{ q }}" placeholder="Buscar por nombre, celular o dirección"></div><button class="btn sec">Buscar</button></form>
+    <a class="btn" href="{{ url_for('cliente_form') }}">＋ Nuevo cliente</a>
+  </div>
+</div>
+<div class="tabs">
+  <a href="{{ url_for('clientes', q=q) }}" class="{{ 'on' if not f }}">Todos</a>
+  <a href="{{ url_for('clientes', q=q, f='vencidos') }}" class="{{ 'on' if f == 'vencidos' }}">Con mantenimiento vencido</a>
+  <a href="{{ url_for('clientes', q=q, f='proximos') }}" class="{{ 'on' if f == 'proximos' }}">Vencidos o por vencer</a>
+  <a href="{{ url_for('clientes', q=q, f='debe') }}" class="{{ 'on' if f == 'debe' }}">Con saldo pendiente</a>
+</div>
+<div class="card">
+  <div class="table-wrap"><table>
+    <thead><tr><th>Cliente</th><th>Contacto</th><th class="num">Equipos</th><th>Próximo preventivo</th><th>Último servicio</th><th class="num">Servicios</th><th class="num">Saldo</th></tr></thead>
+    <tbody>
+    {% for x in filas %}{% set c = x.c %}
+      <tr style="cursor:pointer" onclick="location.href='{{ url_for('cliente_detalle', id=c.id) }}'">
+        <td><a href="{{ url_for('cliente_detalle', id=c.id) }}"><b>{{ c.nombre }}</b></a><div class="muted" style="font-size:.82rem">{{ c.tipo }}{% if c.barrio %} · {{ c.barrio }}{% endif %}</div></td>
+        <td>{{ c.telefono or '—' }}</td>
+        <td class="num">{{ x.n_eq }}</td>
+        <td>{% if x.prox %}<span class="dot {{ {'vencido': 'err', 'proximo': 'warn', 'al_dia': 'ok'}.get(x.peor, '') }}"></span> {{ x.prox|fecha }}{% elif x.n_eq %}<span class="muted">Sin fecha</span>{% else %}<span class="muted">Sin equipos</span>{% endif %}</td>
+        <td>{{ x.ultimo|fecha if x.ultimo else '—' }}</td>
+        <td class="num">{{ x.servicios }}</td>
+        <td class="num">{% if x.saldo > 0.5 %}<b class="neg">{{ x.saldo|cop }}</b>{% else %}—{% endif %}</td>
+      </tr>
+    {% else %}
+      <tr><td colspan="7" class="empty">{% if q or f %}No hay clientes con ese filtro.{% else %}Aún no hay clientes. <a href="{{ url_for('cliente_form') }}">Crea el primero</a>.{% endif %}</td></tr>
+    {% endfor %}
+    </tbody>
+  </table></div>
+</div>
+{% endblock %}

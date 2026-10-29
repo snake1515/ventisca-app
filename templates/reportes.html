@@ -1,0 +1,121 @@
+{% extends "base.html" %}
+{% block title %}Reportes{% endblock %}
+{% block content %}
+<style>
+  .seg { display: inline-flex; border: 1px solid #cfd9e3; border-radius: 9px; overflow: hidden; background: #fff; }
+  .seg a { padding: 8px 14px; font-weight: 700; color: var(--ink); text-decoration: none; border-right: 1px solid #cfd9e3; }
+  .seg a:last-child { border-right: 0; }
+  .seg a.on { background: var(--nav); color: #fff; }
+  .rep-table th, .rep-table td { white-space: nowrap; }
+  .rep-table td:first-child, .rep-table th:first-child { position: sticky; left: 0; background: var(--panel); z-index: 1; }
+  .rep-table tfoot td:first-child { background: var(--panel); }
+  .col-neta { background: #f3fbf7; }
+</style>
+<div class="page-head">
+  <div><h1>Reportes</h1><p>Servicios, venta de equipos, compras, nómina, gastos y ganancias del {{ desde }} al {{ hasta }}.</p></div>
+  <a class="btn" href="{{ url_for('reportes_excel', agrupar=agrupar, desde=desde, hasta=hasta) }}">⇣ Descargar Excel</a>
+</div>
+
+<div class="card" style="margin-bottom:16px">
+  <form class="filters" method="get" id="ff">
+    <div class="field"><label>Agrupar</label>
+      <div class="seg">{% for k, v in agrupaciones.items() %}<a href="{{ url_for('reportes', agrupar=k) }}" class="{{ 'on' if k == agrupar }}">{{ v }}</a>{% endfor %}</div>
+      <input type="hidden" name="agrupar" value="{{ agrupar }}">
+    </div>
+    <div class="field"><label>Desde</label><input class="input" type="date" name="desde" value="{{ desde }}"></div>
+    <div class="field"><label>Hasta</label><input class="input" type="date" name="hasta" value="{{ hasta }}"></div>
+    <button class="btn sec">Ver</button>
+  </form>
+</div>
+
+{% set t = rep.tot %}
+<div class="kpis">
+  <div class="kpi"><div class="lbl">Ingresos</div><div class="val">{{ t.ingresos|cop }}</div><div class="sub">{{ t.num_ordenes|num }} servicios {{ t.servicios|cop }} · equipos {{ t.ventas_eq|cop }}</div></div>
+  <div class="kpi"><div class="lbl">Costos directos</div><div class="val">{{ (t.costo_serv + t.costo_eq)|cop }}</div><div class="sub">Materiales y técnicos {{ t.costo_serv|cop }} · equipos {{ t.costo_eq|cop }}</div></div>
+  <div class="kpi"><div class="lbl">Gastos fijos</div><div class="val">{{ (t.nomina + t.equipos + t.gastos)|cop }}</div><div class="sub">Nómina {{ t.nomina|cop }} · herramientas {{ t.equipos|cop }} · gastos {{ t.gastos|cop }}</div></div>
+  <div class="kpi hl"><div class="lbl">Ganancia neta</div><div class="val {{ 'pos' if t.neta >= 0 else 'neg' }}">{{ t.neta|cop }}</div><div class="sub">{% if t.margen is not none %}Margen neto {{ t.margen|num(1) }}%{% else %}Sin ingresos{% endif %} · bruta {{ t.bruta|cop }}</div></div>
+</div>
+
+<div class="card">
+  <div class="card-head"><h2>{{ agrupaciones[agrupar] }}: ingresos, costos y ganancia neta</h2></div>
+  <div style="height:280px"><canvas id="ch"></canvas></div>
+</div>
+
+<div class="card">
+  <div class="card-head"><h2>Detalle {{ agrupaciones[agrupar]|lower }}</h2><small class="muted">Desliza la tabla hacia los lados en el celular</small></div>
+  <div class="table-wrap"><table class="rep-table">
+    <thead><tr><th>Periodo</th>{% for c, titulo, d in columnas %}<th class="num {{ 'col-neta' if c == 'neta' }}">{{ titulo }}</th>{% endfor %}<th class="num">Margen neto</th></tr></thead>
+    <tbody>
+    {% for f in rep.filas|reverse %}
+      <tr>
+        <td><b>{{ f.periodo }}</b></td>
+        {% for c, titulo, dinero in columnas %}
+          <td class="num {{ 'col-neta' if c == 'neta' }} {{ ('pos' if f[c] >= 0 else 'neg') if c in ('bruta', 'neta') and f[c] else '' }}">
+            {% if f[c] %}{{ f[c]|cop if dinero else f[c]|num }}{% else %}<span class="muted">—</span>{% endif %}</td>
+        {% endfor %}
+        <td class="num">{{ (f.margen|num(1) ~ '%') if f.margen is not none else '—' }}</td>
+      </tr>
+    {% endfor %}
+    </tbody>
+    <tfoot><tr><td>Total</td>{% for c, titulo, dinero in columnas %}<td class="num {{ 'col-neta' if c == 'neta' }}">{{ t[c]|cop if dinero else t[c]|num }}</td>{% endfor %}<td class="num">{{ (t.margen|num(1) ~ '%') if t.margen is not none else '—' }}</td></tr></tfoot>
+  </table></div>
+</div>
+
+<div class="grid g2" style="margin-top:16px">
+  <div class="card">
+    <div class="card-head"><h2>Por tipo de servicio</h2></div>
+    <div class="table-wrap"><table>
+      <thead><tr><th>Servicio</th><th class="num">Órdenes</th><th class="num">Equipos</th><th class="num">Cobrado</th><th class="num">Ganancia</th></tr></thead>
+      <tbody>{% for p in rep.por_tipo %}
+        <tr><td>{{ p.nombre }}</td><td class="num">{{ p.n|int }}</td><td class="num">{{ p.equipos|int }}</td><td class="num">{{ p.ingresos|cop }}</td><td class="num {{ 'pos' if p.ganancia >= 0 else 'neg' }}">{{ p.ganancia|cop }}</td></tr>
+      {% else %}<tr><td colspan="5" class="empty">Sin servicios en el periodo.</td></tr>{% endfor %}</tbody>
+    </table></div>
+  </div>
+  <div class="card">
+    <div class="card-head"><h2>Por técnico</h2></div>
+    <div class="table-wrap"><table>
+      <thead><tr><th>Técnico</th><th class="num">Órdenes</th><th class="num">En garantía</th><th class="num">Cobrado</th><th class="num">Comisiones</th></tr></thead>
+      <tbody>{% for p in rep.por_tecnico %}
+        <tr><td>{{ p.nombre }}</td><td class="num">{{ p.n|int }}</td><td class="num">{{ (p.garantias or 0)|int }}</td><td class="num">{{ p.ingresos|cop }}</td><td class="num">{{ p.comision|cop }}</td></tr>
+      {% else %}<tr><td colspan="5" class="empty">Sin servicios en el periodo.</td></tr>{% endfor %}</tbody>
+    </table></div>
+  </div>
+</div>
+<div class="grid g2" style="margin-top:16px">
+  <div class="card">
+    <div class="card-head"><h2>Clientes que más facturaron</h2><a class="btn sec sm" href="{{ url_for('clientes') }}">Ver clientes</a></div>
+    <div class="table-wrap"><table>
+      <thead><tr><th>#</th><th>Cliente</th><th class="num">Servicios</th><th class="num">Equipos</th><th class="num">Total</th></tr></thead>
+      <tbody>{% for cl in rep.por_cliente[:10] %}<tr><td>{{ loop.index }}</td><td>{{ cl.nombre }}</td><td class="num">{{ (cl.servicios or 0)|int }}</td><td class="num">{{ (cl.equipos or 0)|int }}</td><td class="num">{{ cl.ingresos|cop }}</td></tr>
+      {% else %}<tr><td colspan="5" class="empty">Sin ingresos en el periodo.</td></tr>{% endfor %}</tbody>
+    </table></div>
+  </div>
+  <div class="card">
+    <div class="card-head"><h2>Gastos por categoría</h2><span class="badge">{{ t.gastos|cop }}</span></div>
+    {% for c, v in rep.gastos_cat %}
+      <div class="sum-line"><span>{{ c }}</span><b>{{ v|cop }}</b></div>
+    {% else %}<p class="hint">Sin gastos en el periodo.</p>{% endfor %}
+    <div class="sum-line" style="margin-top:8px;border-top:1px solid var(--line)"><span>Nómina (sin comisiones)</span><b>{{ t.nomina|cop }}</b></div>
+    <div class="sum-line"><span>Desgaste de herramientas</span><b>{{ t.equipos|cop }}</b></div>
+  </div>
+</div>
+<p class="hint" style="margin-top:12px">El Excel trae: consolidado (con fórmulas y gráfico), por servicio, por técnico, por cliente, órdenes, venta de equipos, gastos, compras, nómina, cartera y la agenda de preventivos de los próximos 90 días.</p>
+{% endblock %}
+{% block scripts %}
+<script src="{{ url_for('static', filename='vendor/chart.umd.js', v=STATIC_V) }}"></script>
+<script>
+  const S = {{ serie|tojson }};
+  new Chart(document.getElementById('ch'), {
+    type: 'bar',
+    data: { labels: S.labels, datasets: [
+      { label: 'Ingresos', data: S.ingresos, backgroundColor: '#29b6f6', borderRadius: 4, order: 2 },
+      { label: 'Costos directos', data: S.costos, backgroundColor: '#c9dcf2', borderRadius: 4, order: 3 },
+      { label: 'Ganancia neta', data: S.neta, type: 'line', borderColor: '#0d47a1', backgroundColor: '#0d47a1', tension: .3, pointRadius: 3, order: 1 }
+    ]},
+    options: { maintainAspectRatio: false, interaction: { mode: 'index', intersect: false },
+      plugins: { legend: { position: 'bottom', labels: { boxWidth: 12 } },
+        tooltip: { callbacks: { label: c => c.dataset.label + ': ' + COP(c.parsed.y) } } },
+      scales: { y: { ticks: { callback: v => COP(v) }, grid: { color: '#eef2f6' } }, x: { grid: { display: false } } } }
+  });
+</script>
+{% endblock %}

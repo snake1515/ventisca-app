@@ -1,0 +1,118 @@
+{% extends "base.html" %}
+{% block title %}{{ 'Editar cotización' if c else 'Nueva cotización' }}{% endblock %}
+{% block content %}
+<div class="page-head">
+  <div><h1>{{ ('Editar ' ~ c.numero) if c else 'Nueva cotización' }}</h1><p>Cuando el cliente la apruebe, la conviertes en orden de servicio con un clic.</p></div>
+</div>
+<form method="post" id="f" autocomplete="off">
+<input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+<div class="grid g-main">
+<div>
+  <div class="card">
+    <div class="form-row">
+      <div class="field" style="grid-column:1/-1"><label>Cliente</label>
+        <select class="input" name="cliente_id" id="cliente">
+          <option value="">— Elige el cliente —</option><option value="nuevo">＋ Cliente nuevo</option>
+          {% for x in clientes %}<option value="{{ x.id }}" {{ 'selected' if pre.cliente_id == x.id }}>{{ x.nombre }}{% if x.tel %} · {{ x.tel }}{% endif %}</option>{% endfor %}
+        </select></div>
+    </div>
+    <div class="form-row" id="cliNuevo" style="display:none">
+      <div class="field"><label>Nombre del cliente nuevo</label><input class="input" name="cliente_nuevo" maxlength="120"></div>
+      <div class="field"><label>Celular</label><input class="input" name="cliente_tel" maxlength="40"></div>
+    </div>
+    <div class="form-row">
+      <div class="field"><label>Tipo de servicio</label><select class="input" name="tipo" id="tipo">
+        {% for k, v in TIPOS_SERVICIO.items() %}<option value="{{ k }}" {{ 'selected' if pre.tipo == k }}>{{ v }}</option>{% endfor %}</select></div>
+      <div class="field"><label>Fecha</label><input class="input" type="date" name="fecha" value="{{ pre.fecha }}"></div>
+      <div class="field"><label>Válida por (días)</label><input class="input" type="number" min="1" name="validez_dias" value="{{ pre.validez_dias or 15 }}"></div>
+    </div>
+    <div class="field" style="margin-bottom:0"><label>Descripción del trabajo</label><textarea class="input" name="descripcion" rows="3" placeholder="Ej: Cambio de tarjeta del aire de gerencia, incluye pruebas de funcionamiento.">{{ pre.descripcion or '' }}</textarea></div>
+  </div>
+  <div class="card">
+    <h2 style="margin-bottom:8px">Ítems</h2>
+    <div class="table-wrap"><table class="lines">
+      <thead><tr><th>Concepto</th><th style="width:80px">Cant.</th><th style="width:140px">Valor unit.</th><th class="num" style="width:110px">Subtotal</th><th></th></tr></thead>
+      <tbody id="lineas"></tbody>
+    </table></div>
+    <div class="actions" style="margin-top:8px">
+      <button type="button" class="btn sec sm" id="addServ">＋ Servicio / mano de obra</button>
+      <button type="button" class="btn sec sm" id="addMat">＋ Material o repuesto</button>
+    </div>
+  </div>
+  <div class="card">
+    <div class="field" style="margin-bottom:0"><label>Observaciones (salen en la cotización)</label><textarea class="input" name="nota" rows="2" placeholder="Ej: tiempo de entrega 2 días hábiles.">{{ pre.nota or '' }}</textarea>
+      <div class="hint">Las condiciones generales (forma de pago, garantía) se configuran en Datos del negocio.</div></div>
+  </div>
+</div>
+<div>
+  <div class="card summary">
+    <h2 style="margin-bottom:10px">Total</h2>
+    <div class="sum-line"><span>Subtotal</span><b id="sSub">$ 0</b></div>
+    <div class="form-row c4" style="margin:8px 0">
+      <div class="field" style="margin:0"><label>Descuento</label><input class="input" name="descuento" id="descuento" inputmode="numeric" value="{{ (pre.descuento or 0)|round|int or '' }}"></div>
+      <div class="field" style="margin:0"><label>IVA %</label><input class="input" name="iva_pct" id="iva" inputmode="decimal" value="{{ (pre.iva_pct or 0)|num }}"></div>
+    </div>
+    <div class="sum-total"><span>Total</span><span id="sTotal">$ 0</span></div>
+    <button class="btn block" style="margin-top:14px">Guardar cotización</button>
+  </div>
+</div>
+</div>
+</form>
+{% endblock %}
+{% block scripts %}
+<script>
+  const CLIENTES = {{ clientes|tojson }}, INSUMOS = {{ insumos|tojson }}, PRECIOS = {{ precios|tojson }}, PRE = {{ pre|tojson }};
+  const $ = id => document.getElementById(id);
+  const cliActual = () => CLIENTES.find(c => String(c.id) === $('cliente').value);
+  function filaServ(l) {
+    const cli = cliActual();
+    const ops = (cli ? cli.equipos : []).map(e => `<option value="${e.id}" ${String(e.id) === String(l.ref) ? 'selected' : ''}>${esc(e.corto)}</option>`).join('');
+    return `<tr><td><input type="hidden" name="l_tipo[]" value="serv">
+      <div style="display:flex;gap:6px"><select class="input eqsel" name="l_ref[]" style="max-width:170px"><option value="">Sin equipo</option>${ops}</select>
+      <input class="input" name="l_desc[]" value="${esc(l.desc || '')}" placeholder="Ej: Mano de obra instalación" maxlength="200"></div></td>
+      <td><input class="input" name="l_cant[]" value="${NUM(l.cant || 1)}" inputmode="decimal"></td>
+      <td><input class="input" name="l_precio[]" value="${l.precio ? Math.round(l.precio) : ''}" inputmode="numeric" placeholder="0"></td>
+      <td class="num sub">$ 0</td><td><button type="button" class="btn-icon">✕</button></td></tr>`;
+  }
+  function filaMat(l) {
+    const ops = INSUMOS.map(i => `<option value="${i.id}" ${String(i.id) === String(l.ref) ? 'selected' : ''}>${esc(i.nombre)}</option>`).join('');
+    return `<tr><td><input type="hidden" name="l_tipo[]" value="mat"><input type="hidden" name="l_desc[]" value="${esc(l.desc || '')}">
+      <select class="input matsel" name="l_ref[]"><option value="">— Material —</option>${ops}</select></td>
+      <td><input class="input" name="l_cant[]" value="${NUM(l.cant || 1, 3)}" inputmode="decimal"></td>
+      <td><input class="input" name="l_precio[]" value="${l.precio ? Math.round(l.precio) : ''}" inputmode="numeric" placeholder="0"></td>
+      <td class="num sub">$ 0</td><td><button type="button" class="btn-icon">✕</button></td></tr>`;
+  }
+  function calc() {
+    let sub = 0;
+    $('lineas').querySelectorAll('tr').forEach(tr => {
+      const s = val(tr.querySelector('[name="l_cant[]"]')) * val(tr.querySelector('[name="l_precio[]"]'));
+      sub += s; tr.querySelector('.sub').textContent = COP(s);
+    });
+    const neto = sub - Math.min(val($('descuento')), sub);
+    $('sSub').textContent = COP(sub); $('sTotal').textContent = COP(neto + Math.round(neto * val($('iva')) / 100));
+  }
+  $('cliente').addEventListener('change', () => {
+    $('cliNuevo').style.display = $('cliente').value === 'nuevo' ? '' : 'none';
+    const cli = cliActual();
+    $('lineas').querySelectorAll('.eqsel').forEach(s => s.innerHTML = '<option value="">Sin equipo</option>' + (cli ? cli.equipos.map(e => `<option value="${e.id}">${esc(e.corto)}</option>`).join('') : ''));
+  });
+  $('addServ').addEventListener('click', () => { $('lineas').insertAdjacentHTML('beforeend', filaServ({ precio: PRECIOS[$('tipo').value] })); calc(); });
+  $('addMat').addEventListener('click', () => { $('lineas').insertAdjacentHTML('beforeend', filaMat({})); calc(); });
+  $('f').addEventListener('input', calc);
+  $('f').addEventListener('change', e => {
+    if (e.target.classList.contains('matsel')) {
+      const ins = INSUMOS.find(i => String(i.id) === e.target.value), tr = e.target.closest('tr');
+      if (ins) { tr.querySelector('[name="l_precio[]"]').value = Math.round(ins.precio) || ''; tr.querySelector('[name="l_desc[]"]').value = ins.nombre; }
+    }
+    if (e.target.classList.contains('eqsel')) {
+      const cli = cliActual(), eq = cli && cli.equipos.find(x => String(x.id) === e.target.value), d = e.target.closest('tr').querySelector('[name="l_desc[]"]');
+      if (eq && !d.value) d.value = $('tipo').selectedOptions[0].text + ' · ' + eq.corto;
+    }
+    calc();
+  });
+  $('f').addEventListener('click', e => { const b = e.target.closest('.btn-icon'); if (b) { b.closest('tr').remove(); calc(); } });
+  (PRE.lineas || []).forEach(l => $('lineas').insertAdjacentHTML('beforeend', l.tipo === 'mat' ? filaMat(l) : filaServ(l)));
+  if (!(PRE.lineas || []).length) $('lineas').insertAdjacentHTML('beforeend', filaServ({ precio: PRECIOS[$('tipo').value] }));
+  calc();
+</script>
+{% endblock %}

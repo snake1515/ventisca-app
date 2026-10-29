@@ -1,0 +1,33 @@
+{% extends "base.html" %}
+{% block title %}Cotizaciones{% endblock %}
+{% block content %}
+<div class="page-head">
+  <div><h1>Cotizaciones</h1><p>Del {{ desde }} al {{ hasta }}</p></div>
+  <div class="actions">
+    <form class="filters" method="get">
+      <div class="field"><label>Desde</label><input class="input" type="date" name="desde" value="{{ desde }}"></div>
+      <div class="field"><label>Hasta</label><input class="input" type="date" name="hasta" value="{{ hasta }}"></div>
+      <div class="field"><label>Estado</label><select class="input" name="estado"><option value="">Todas</option>
+        {% for k, t in (('pendiente', 'Pendientes'), ('aprobada', 'Aprobadas'), ('convertida', 'Convertidas en orden'), ('rechazada', 'Rechazadas'), ('vencida', 'Vencidas')) %}<option value="{{ k }}" {{ 'selected' if estado == k }}>{{ t }}</option>{% endfor %}</select></div>
+      <button class="btn sec">Filtrar</button>
+    </form>
+    <a class="btn" href="{{ url_for('cotizacion_form') }}">＋ Nueva cotización</a>
+  </div>
+</div>
+<div class="kpis" style="grid-template-columns:repeat(3,minmax(0,1fr))">
+  <div class="kpi"><div class="lbl">Cotizado</div><div class="val">{{ total|cop }}</div><div class="sub">{{ items|length }} cotizaciones</div></div>
+  <div class="kpi"><div class="lbl">Aprobado</div><div class="val">{{ total_aprob|cop }}</div></div>
+  <div class="kpi"><div class="lbl">Tasa de aprobación</div><div class="val">{{ tasa|num(0) }}%</div></div>
+</div>
+<div class="card"><div class="table-wrap"><table>
+  <thead><tr><th>N.º</th><th>Fecha</th><th>Cliente</th><th>Servicio</th><th>Válida hasta</th><th class="num">Total</th><th>Estado</th></tr></thead>
+  <tbody>
+  {% for c in items %}
+    <tr style="cursor:pointer" onclick="location.href='{{ url_for('cotizacion_detalle', id=c.id) }}'">
+      <td><a href="{{ url_for('cotizacion_detalle', id=c.id) }}"><b>{{ c.numero }}</b></a></td><td>{{ c.fecha|fecha }}</td>
+      <td>{{ c.cliente_nombre }}</td><td>{{ c.tipo_txt }}</td><td>{{ c.valida_hasta|fecha }}</td>
+      <td class="num"><b>{{ c.total_factura|cop }}</b></td><td><span class="badge {{ c.estado_info[1] }}">{{ c.estado_info[0] }}</span></td></tr>
+  {% else %}<tr><td colspan="7" class="empty">No hay cotizaciones en este periodo.</td></tr>{% endfor %}
+  </tbody>
+</table></div></div>
+{% endblock %}

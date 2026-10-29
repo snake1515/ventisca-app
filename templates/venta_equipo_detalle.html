@@ -1,0 +1,60 @@
+{% extends "base.html" %}
+{% block title %}Venta {{ v.numero }}{% endblock %}
+{% block content %}
+<div class="page-head">
+  <div><h1>Venta {{ v.numero }} {% if v.anulada %}<span class="badge err">Anulada</span>{% endif %}</h1><p>{{ v.cliente_nombre }} · {{ v.fecha|fecha }}</p></div>
+  <div class="actions">
+    {% if wa %}<a class="btn wa" href="{{ wa }}" target="_blank" rel="noopener">WhatsApp al cliente</a>{% endif %}
+    <a class="btn sec" href="{{ url_for('venta_equipo_documento', id=v.id, fmt='pdf') }}" target="_blank">Recibo PDF</a>
+    <a class="btn sec" href="{{ url_for('venta_equipo_documento', id=v.id, fmt='jpg') }}" target="_blank">Imagen</a>
+    {% if not v.anulada %}<a class="btn sec" href="{{ url_for('venta_equipo_form', id=v.id) }}">Editar</a>{% endif %}
+  </div>
+</div>
+<div class="grid g-main">
+  <div>
+    <div class="card">
+      <h2 style="margin-bottom:10px">{{ v.cantidad }} × {{ v.descripcion }}</h2>
+      <dl class="kv">
+        <dt>Cliente</dt><dd>{% if v.cliente %}<a href="{{ url_for('cliente_detalle', id=v.cliente_id) }}">{{ v.cliente_nombre }}</a>{% else %}{{ v.cliente_nombre }}{% endif %}</dd>
+        <dt>Proveedor</dt><dd>{{ v.proveedor or '—' }}</dd>
+        <dt>Garantía de fábrica</dt><dd>{{ v.garantia_meses }} meses</dd>
+        {% if v.orden_instalacion %}<dt>Instalación</dt><dd><a href="{{ url_for('orden_detalle', id=v.orden_instalacion.id) }}">{{ num_orden(v.orden_instalacion) }}</a> · <span class="badge {{ v.orden_instalacion.estado_info[1] }}">{{ v.orden_instalacion.estado_info[0] }}</span></dd>{% endif %}
+        {% if v.nota %}<dt>Nota</dt><dd>{{ v.nota }}</dd>{% endif %}
+        <dt>Registró</dt><dd>{{ v.usuario.nombre if v.usuario else '—' }}</dd>
+      </dl>
+      {% if not v.orden_instalacion and v.cliente and not v.anulada %}<a class="btn sec sm" style="margin-top:12px" href="{{ url_for('orden_nueva', cliente=v.cliente_id, tipo='instalacion') }}">Agendar instalación</a>{% endif %}
+    </div>
+    {% if puede('admin') %}
+    <div class="card">
+      <h2 style="margin-bottom:8px">Rentabilidad</h2>
+      <div class="sum-line"><span>Precio al cliente (sin IVA)</span><b>{{ v.precio_total|cop }}</b></div>
+      <div class="sum-line"><span>− Costo del proveedor</span><b>{{ v.costo_total|cop }}</b></div>
+      <div class="sum-line"><span>− Flete y otros</span><b>{{ v.otros_costos|cop }}</b></div>
+      <div class="sum-total"><span>Ganancia ({{ v.margen|num(1) }}%)</span><span class="{{ 'pos' if v.ganancia >= 0 else 'neg' }}">{{ v.ganancia|cop }}</span></div>
+      <form method="post" action="{{ url_for('venta_equipo_anular', id=v.id) }}" style="margin-top:14px" onsubmit="return confirm('¿Anular la venta {{ v.numero }}?')">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">{% if not v.anulada %}<button class="btn danger sm">Anular venta</button>{% endif %}</form>
+    </div>
+    {% endif %}
+  </div>
+  <div class="card summary">
+    <h2 style="margin-bottom:6px">Cobro</h2>
+    <div class="big-num">{{ v.total_factura|cop }}</div>
+    {% if v.iva %}<div class="muted">Incluye IVA {{ v.iva_pct|num }}%: {{ v.iva|cop }}</div>{% endif %}
+    <div style="margin:10px 0"><span class="badge {{ v.estado_pago[1] }}">{{ v.estado_pago[0] }}</span> {{ 'Crédito' if v.condicion == 'credito' else ('Contado · ' ~ (v.metodo_pago or '')) }}{% if v.vence %} · vence {{ v.vence|fecha }}{% endif %}</div>
+    {% if v.condicion == 'credito' %}
+      <div class="sum-line"><span>Abonado</span><b>{{ v.pagado|cop }}</b></div>
+      <div class="sum-line"><span>Saldo</span><b class="{{ 'neg' if v.saldo > 0.5 }}">{{ v.saldo|cop }}</b></div>
+      {% for a in v.abonos %}<div class="sum-line" style="font-size:.86rem"><span class="{{ 'muted' if a.anulado }}">{{ a.fecha|fecha }} · {{ a.metodo }}</span><span><b>{{ a.valor|cop }}</b>{% if puede('admin') and not a.anulado %}
+        <form method="post" action="{{ url_for('abono_anular', id=a.id) }}" style="display:inline" onsubmit="return confirm('¿Anular este abono?')"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><button class="btn-icon">✕</button></form>{% endif %}</span></div>{% endfor %}
+      {% if v.saldo > 0.5 %}
+      <form method="post" action="{{ url_for('abono_nuevo', tipo='equipo', id=v.id) }}" style="margin-top:12px">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="fecha" value="{{ hoy }}">
+        <div class="form-row c4"><div class="field"><label>Abono</label><input class="input" name="valor" inputmode="numeric" value="{{ v.saldo|round|int }}"></div>
+          <div class="field"><label>Medio</label><select class="input" name="metodo">{% for m in metodos %}<option>{{ m }}</option>{% endfor %}</select></div></div>
+        <button class="btn block">Registrar abono</button>
+      </form>
+      {% endif %}
+    {% endif %}
+  </div>
+</div>
+{% endblock %}

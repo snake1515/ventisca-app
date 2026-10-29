@@ -1,0 +1,63 @@
+{% extends "base.html" %}
+{% block title %}{{ 'Editar' if e else 'Nuevo' }} técnico{% endblock %}
+{% block content %}
+{% set F = request.form %}
+<div class="page-head"><div><h1>{{ 'Editar ' ~ e.nombre if e else 'Nuevo técnico' }}</h1><p>Datos, forma de pago y acceso a la app desde su celular.</p></div></div>
+<div class="card" style="max-width:820px">
+  <form method="post" autocomplete="off">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <div class="form-row">
+      <div class="field"><label>Nombre completo</label><input class="input" name="nombre" value="{{ F.nombre or (e.nombre if e else '') }}" required></div>
+      <div class="field"><label>Cédula</label><input class="input" name="documento" value="{{ F.documento or (e.documento or '' if e else '') }}"></div>
+      <div class="field"><label>Celular</label><input class="input" name="telefono" value="{{ F.telefono or (e.telefono or '' if e else '') }}"></div>
+    </div>
+    <div class="form-row">
+      <div class="field"><label>Cargo</label><input class="input" name="cargo" list="cargos" value="{{ F.cargo or (e.cargo or '' if e else 'Técnico') }}"><datalist id="cargos"><option value="Técnico líder"><option value="Técnico"><option value="Ayudante"></datalist></div>
+      <div class="field"><label>Fecha de ingreso</label><input class="input" type="date" name="fecha_ingreso" value="{{ F.fecha_ingreso or (e.fecha_ingreso.isoformat() if e and e.fecha_ingreso else '') }}"></div>
+    </div>
+    <h3 style="margin:6px 0 10px">Forma de pago</h3>
+    <div class="form-row">
+      <div class="field"><label>Se le paga</label><select class="input" name="tipo_pago" id="tipo">
+        {% set st = F.tipo_pago or (e.tipo_pago if e else 'comision') %}{% for k, v in tipos.items() %}<option value="{{ k }}" {{ 'selected' if k == st }}>{{ v }}</option>{% endfor %}</select></div>
+      <div class="field" id="salBox"><label>Salario mensual ($)</label><input class="input" name="salario" inputmode="numeric" value="{{ F.salario or ((e.salario|round|int) if e and e.salario else '') }}"></div>
+    </div>
+    <div class="form-row" id="comBox">
+      <div class="field"><label>Comisión</label><select class="input" name="comision_tipo">
+        {% set sct = F.comision_tipo or (e.comision_tipo if e else 'pct') %}{% for k, v in comision_tipos.items() %}<option value="{{ k }}" {{ 'selected' if k == sct }}>{{ v }}</option>{% endfor %}</select></div>
+      <div class="field"><label>Valor</label><input class="input" name="comision_valor" inputmode="decimal" value="{{ F.comision_valor or ((e.comision_valor|num) if e and e.comision_valor else '') }}" placeholder="Ej: 40 (%) o 25000 ($)">
+        <div class="hint">El porcentaje se calcula sobre la mano de obra cobrada (sin materiales). En cada orden se puede ajustar.</div></div>
+    </div>
+    <p class="hint" id="tipoHint" style="margin-top:-6px"></p>
+    <label class="check" style="margin-bottom:14px"><input type="checkbox" name="aux_transporte" value="1" {{ 'checked' if (F.aux_transporte if F else (e.aux_transporte if e else True)) }}> <span>Recibe auxilio de transporte <small class="muted">(si gana hasta 2 salarios mínimos)</small></span></label>
+
+    <h3 style="margin:6px 0 10px">Acceso a la app</h3>
+    {% if e and e.usuario %}
+      <div class="note" style="margin-bottom:14px">Entra con el usuario <b>{{ e.usuario.username }}</b> y ve solo su agenda y sus órdenes. La clave se cambia en <a href="{{ url_for('usuario_form', id=e.usuario.id) }}">Usuarios</a>.</div>
+    {% else %}
+      <label class="check" style="margin-bottom:10px"><input type="checkbox" name="crear_usuario" id="crearU" value="1" {{ 'checked' if F.crear_usuario }}> <span>Crearle usuario para que vea su agenda en el celular</span></label>
+      <div class="form-row" id="userBox">
+        <div class="field"><label>Usuario</label><input class="input" name="username" value="{{ F.username or '' }}" placeholder="Ej: carlos" autocomplete="off"></div>
+        <div class="field"><label>Contraseña</label><input class="input" type="password" name="password" autocomplete="new-password" placeholder="Mínimo 6 caracteres"></div>
+      </div>
+    {% endif %}
+    {% if e %}<label class="check" style="margin-bottom:14px"><input type="checkbox" name="activo" value="1" {{ 'checked' if (F.activo if F else e.activo) }}> <span>Activo (desmarca si se retiró; también se le bloquea el acceso)</span></label>{% endif %}
+    <div class="field"><label>Nota</label><input class="input" name="nota" value="{{ F.nota or (e.nota or '' if e else '') }}" placeholder="Opcional"></div>
+    <div class="actions"><button class="btn">Guardar</button><a class="btn sec" href="{{ url_for('empleado_detalle', id=e.id) if e else url_for('empleados') }}">Cancelar</a></div>
+  </form>
+</div>
+{% endblock %}
+{% block scripts %}
+<script>
+  const t = document.getElementById('tipo'), cu = document.getElementById('crearU');
+  const H = { comision: 'Se le paga por cada servicio terminado: la app suma sus comisiones al liquidar la nómina.',
+    fijo: 'Sueldo mensual proporcional a los días. Sus órdenes no generan comisión.',
+    mixto: 'Sueldo básico + comisión por cada servicio terminado.' };
+  const ui = () => {
+    document.getElementById('salBox').style.display = t.value === 'comision' ? 'none' : '';
+    document.getElementById('comBox').style.display = t.value === 'fijo' ? 'none' : '';
+    document.getElementById('tipoHint').textContent = H[t.value];
+    if (cu) document.getElementById('userBox').style.display = cu.checked ? '' : 'none';
+  };
+  t.addEventListener('change', ui); if (cu) cu.addEventListener('change', ui); ui();
+</script>
+{% endblock %}

@@ -1,0 +1,111 @@
+{% extends "base.html" %}
+{% block title %}Resumen{% endblock %}
+{% block content %}
+<div class="page-head">
+  <div><h1>Resumen del negocio</h1><p>Ingresos, costos y ganancia del {{ desde }} al {{ hasta }}</p></div>
+  <form class="filters" method="get">
+    <div class="field"><label>Desde</label><input class="input" type="date" name="desde" value="{{ desde }}"></div>
+    <div class="field"><label>Hasta</label><input class="input" type="date" name="hasta" value="{{ hasta }}"></div>
+    <button class="btn sec">Filtrar</button>
+  </form>
+</div>
+
+{% if ALERTAS_N %}
+<a class="gar-box" href="{{ url_for('mantenimientos') }}" style="display:flex;justify-content:space-between;align-items:center;gap:10px;text-decoration:none">
+  <span>❄ <b>{{ ALERTAS_N }} equipo{{ 's' if ALERTAS_N != 1 }}</b> con mantenimiento preventivo vencido o por vencer sin agendar.</span>
+  <span class="btn sm">Ver y agendar</span>
+</a>
+{% endif %}
+
+<div class="kpis">
+  <div class="kpi"><div class="lbl">Ingresos (sin IVA)</div><div class="val">{{ ingresos|cop }}</div><div class="sub">Servicios {{ serv|cop }} · equipos {{ ventas_eq|cop }}</div></div>
+  <div class="kpi"><div class="lbl">Servicios hechos</div><div class="val">{{ n_ordenes }}</div><div class="sub">{{ n_equipos_atendidos }} equipos atendidos{% if garantias_mes %} · {{ garantias_mes }} en garantía{% endif %}</div></div>
+  <div class="kpi hl"><div class="lbl">Ganancia neta</div><div class="val {{ 'pos' if neta >= 0 else 'neg' }}">{{ neta|cop }}</div><div class="sub">Bruta {{ bruta|cop }} · margen neto {{ margen|num(1) }}%</div></div>
+  <div class="kpi"><div class="lbl">Venta de equipos</div><div class="val">{{ ganancia_eq|cop }}</div><div class="sub">ganancia en {{ n_ves }} venta{{ 's' if n_ves != 1 }} · <a href="{{ url_for('ventas_equipos', desde=desde, hasta=hasta) }}">ver</a></div></div>
+</div>
+<div class="kpis">
+  <div class="kpi"><div class="lbl">Cartera por cobrar</div><div class="val">{{ cartera|cop }}</div><div class="sub">{{ n_credito }} documento{{ 's' if n_credito != 1 }} · <a href="{{ url_for('cartera') }}">ver</a></div></div>
+  <div class="kpi"><div class="lbl">Cartera vencida</div><div class="val {{ 'neg' if cartera_vencida > 0.5 }}">{{ cartera_vencida|cop }}</div><div class="sub"><a href="{{ url_for('cartera', f='vencidas') }}">ver vencidas</a></div></div>
+  <div class="kpi"><div class="lbl">Cotizaciones abiertas</div><div class="val">{{ cot_pendientes }}</div><div class="sub">esperando respuesta · <a href="{{ url_for('cotizaciones') }}">ver</a></div></div>
+  <div class="kpi"><div class="lbl">Materiales en bodega</div><div class="val">{{ valor_insumos|cop }}</div><div class="sub">{% if alertas_insumos %}<span class="neg">{{ alertas_insumos|length }} bajo el mínimo</span>{% else %}al costo promedio{% endif %}</div></div>
+</div>
+
+<div class="grid g-main">
+  <div>
+    <div class="card">
+      <div class="card-head"><h2>Ingresos y ganancia por día</h2></div>
+      <div style="height:260px"><canvas id="chartDias"></canvas></div>
+    </div>
+    <div class="card">
+      <div class="card-head"><h2>Servicios por tipo</h2><a href="{{ url_for('reportes') }}" class="btn sec sm">Reportes</a></div>
+      {% if por_tipo %}
+      {% set top = (por_tipo|map(attribute=2)|max) or 1 %}
+      <div class="table-wrap"><table>
+        <thead><tr><th>Servicio</th><th class="num">Órdenes</th><th class="num">Cobrado</th><th class="num">Ganancia</th></tr></thead>
+        <tbody>
+        {% for nombre, n_, cobrado, gan in por_tipo %}
+          <tr><td><b>{{ nombre }}</b><div class="bar"><span style="width:{{ [gan / top * 100, 0]|max|round(1) }}%"></span></div></td>
+            <td class="num">{{ n_ }}</td><td class="num">{{ cobrado|cop }}</td><td class="num"><b>{{ gan|cop }}</b></td></tr>
+        {% endfor %}
+        </tbody>
+      </table></div>
+      {% else %}<div class="empty">Aún no hay servicios terminados en este periodo.</div>{% endif %}
+    </div>
+  </div>
+  <div>
+    <div class="card">
+      <div class="card-head"><h2>Visitas de hoy y mañana</h2><a href="{{ url_for('agenda') }}" class="btn sec sm">Agenda</a></div>
+      {% if agenda_hoy %}
+      <div class="list">
+        {% for o in agenda_hoy %}
+        <a class="list-item" href="{{ url_for('orden_detalle', id=o.id) }}" style="color:inherit;text-decoration:none">
+          <div class="hora">{{ o.fecha|hora }}</div>
+          <div class="grow"><div class="t">{{ o.cliente_nombre }}</div>
+            <div class="s">{{ o.fecha|dia }} · {{ o.tipo_txt }} · {{ o.equipos|length }} equipo{{ 's' if o.equipos|length != 1 }}{% if o.tecnico %} · {{ o.tecnico.nombre }}{% endif %}</div></div>
+          {% if o.fecha.date() < hoy_d %}<span class="badge err">Atrasada</span>{% else %}<span class="badge {{ o.estado_info[1] }}">{{ o.estado_info[0] }}</span>{% endif %}
+        </a>
+        {% endfor %}
+      </div>
+      {% else %}<div class="empty">No hay visitas programadas para hoy ni mañana.</div>{% endif %}
+      <a class="btn block" style="margin-top:12px" href="{{ url_for('orden_nueva') }}">＋ Nueva orden de servicio</a>
+    </div>
+    <div class="card">
+      <h2 style="margin-bottom:10px">De dónde sale la ganancia</h2>
+      <div class="sum-line"><span>Ingresos por servicios</span><b>{{ serv|cop }}</b></div>
+      <div class="sum-line"><span>Venta de equipos</span><b>{{ ventas_eq|cop }}</b></div>
+      <div class="sum-line"><span>− Materiales, comisiones y transporte</span><b>{{ costo_serv|cop }}</b></div>
+      <div class="sum-line"><span>− Costo de los equipos vendidos</span><b>{{ costo_eq|cop }}</b></div>
+      {% if nomina_gasto > 0.5 %}<div class="sum-line"><span>− Nómina (salarios y aportes)</span><b>{{ nomina_gasto|cop }}</b></div>{% endif %}
+      {% for cat, v in gastos_det %}<div class="sum-line"><span>− {{ cat }}</span><b>{{ v|cop }}</b></div>{% endfor %}
+      {% if depreciacion > 0.5 %}<div class="sum-line"><span>− Desgaste de herramientas</span><b>{{ depreciacion|cop }}</b></div>{% endif %}
+      <div class="sum-total"><span>Ganancia neta</span><span class="{{ 'pos' if neta >= 0 else 'neg' }}">{{ neta|cop }}</span></div>
+    </div>
+    {% if alertas_insumos %}
+    <div class="card">
+      <h2 style="margin-bottom:8px">Materiales por comprar</h2>
+      {% for i in alertas_insumos %}
+      <div class="sum-line"><span>{{ i.nombre }}</span><b class="neg">{{ i.stock|num }} {{ i.unidad }}</b></div>
+      {% endfor %}
+      <a class="btn sec sm" style="margin-top:10px" href="{{ url_for('compra_nueva') }}">Registrar compra</a>
+    </div>
+    {% endif %}
+  </div>
+</div>
+
+{% if mostrar_modal %}{% include "_modal_alertas.html" %}{% endif %}
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('static', filename='vendor/chart.umd.js', v=STATIC_V) }}"></script>
+<script>
+  const S = {{ serie|tojson }};
+  new Chart(document.getElementById('chartDias'), {
+    type: 'bar',
+    data: { labels: S.labels, datasets: [
+      { label: 'Ingresos', data: S.ingresos, backgroundColor: '#29b6f6', borderRadius: 4, order: 2 },
+      { label: 'Ganancia', data: S.ganancia, type: 'line', borderColor: '#0d47a1', backgroundColor: '#0d47a1', tension: .3, pointRadius: 2, order: 1 } ] },
+    options: { maintainAspectRatio: false, plugins: { legend: { position: 'bottom' }, tooltip: { callbacks: { label: c => c.dataset.label + ': ' + COP(c.raw) } } },
+      scales: { y: { ticks: { callback: v => COP(v) } }, x: { grid: { display: false } } } }
+  });
+</script>
+{% endblock %}

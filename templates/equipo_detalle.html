@@ -1,0 +1,58 @@
+{% extends "base.html" %}
+{% block title %}{{ e.corto }}{% endblock %}
+{% block content %}
+<div class="page-head">
+  <div><h1>{{ e.nombre }} {% if not e.activo %}<span class="badge gray">Retirado</span>{% endif %}</h1>
+    <p>Hoja de vida del equipo · <a href="{{ url_for('cliente_detalle', id=e.cliente_id) }}">{{ e.cliente.nombre }}</a></p></div>
+  <div class="actions">
+    {% if e.activo %}<a class="btn" href="{{ url_for('orden_nueva', cliente=e.cliente_id, equipo=e.id, tipo='preventivo') }}">＋ Orden para este equipo</a>{% endif %}
+    {% if wa and e.activo %}<a class="btn wa" href="{{ wa }}" target="_blank" rel="noopener">Recordar por WhatsApp</a>{% endif %}
+    <a class="btn sec" href="{{ url_for('equipo_form', id=e.id) }}">Editar</a>
+  </div>
+</div>
+{% if gar %}<div class="gar-box">En garantía hasta el <b>{{ gar.garantia_hasta|fecha }}</b> por la orden <a href="{{ url_for('orden_detalle', id=gar.id) }}">{{ num_orden(gar) }}</a> ({{ gar.tipo_txt|lower }}).
+  <a href="{{ url_for('orden_nueva', garantia_de=gar.id, equipo=e.id) }}">Registrar visita en garantía</a></div>{% endif %}
+<div class="grid g-main">
+  <div class="card">
+    <h2 style="margin-bottom:10px">Servicios realizados</h2>
+    <div class="list">
+    {% for o in hist %}
+      <a class="list-item" href="{{ url_for('orden_detalle', id=o.id) }}" style="color:inherit;text-decoration:none">
+        <div style="min-width:92px"><b>{{ (o.fecha_fin or o.fecha)|fecha }}</b><div class="muted" style="font-size:.82rem">{{ num_orden(o) }}</div></div>
+        <div class="grow"><div class="t">{{ o.tipo_txt }}{% if o.en_garantia %} <span class="badge warn">garantía</span>{% endif %}</div>
+          <div class="s">{{ o.trabajo or o.descripcion or '' }}</div>
+          {% set mats = o.materiales|map(attribute='insumo.nombre')|list %}{% if mats %}<div class="s">Materiales: {{ mats|join(', ') }}</div>{% endif %}</div>
+        <span class="badge {{ o.estado_info[1] }}">{{ o.estado_info[0] }}</span>
+      </a>
+    {% else %}<div class="empty">Aún no tiene servicios registrados en la app.</div>{% endfor %}
+    </div>
+  </div>
+  <div>
+    <div class="card">
+      <h2 style="margin-bottom:10px">Plan de mantenimiento</h2>
+      <div style="margin-bottom:10px"><span class="badge {{ est[2] }}">{{ est[1] }}</span>{% if agendado %} <a class="badge info" href="{{ url_for('orden_detalle', id=agendado.id) }}">Agendado {{ agendado.fecha|dia|lower }} {{ agendado.fecha|hora }}</a>{% endif %}</div>
+      <dl class="kv">
+        <dt>Frecuencia</dt><dd>{{ ('Cada ' ~ e.frecuencia_meses ~ ' meses') if e.con_plan else 'Sin plan' }}</dd>
+        <dt>Último preventivo</dt><dd>{{ e.ultimo_preventivo|fecha if e.ultimo_preventivo else '—' }}</dd>
+        <dt>Próximo</dt><dd><b>{{ e.proximo_preventivo|fecha if e.proximo_preventivo else '—' }}</b></dd>
+        {% if e.pospuesto_hasta %}<dt>Pospuesto</dt><dd>hasta {{ e.pospuesto_hasta|fecha }}</dd>{% endif %}
+        {% if e.aviso_fecha %}<dt>Avisado</dt><dd>{{ e.aviso_fecha|fecha }}</dd>{% endif %}
+      </dl>
+    </div>
+    <div class="card">
+      <h2 style="margin-bottom:10px">Datos técnicos</h2>
+      <dl class="kv">
+        <dt>Tipo</dt><dd>{{ e.tipo }}</dd>
+        {% if e.capacidad_btu %}<dt>Capacidad</dt><dd>{{ e.btu_txt }}</dd>{% endif %}
+        {% if e.marca %}<dt>Marca</dt><dd>{{ e.marca }}{% if e.modelo %} · {{ e.modelo }}{% endif %}</dd>{% endif %}
+        {% if e.refrigerante %}<dt>Refrigerante</dt><dd>{{ e.refrigerante }}</dd>{% endif %}
+        <dt>Inverter</dt><dd>{{ 'Sí' if e.inverter else 'No' }}</dd>
+        {% if e.serial %}<dt>Serial</dt><dd>{{ e.serial }}</dd>{% endif %}
+        {% if e.ubicacion %}<dt>Ubicación</dt><dd>{{ e.ubicacion }}</dd>{% endif %}
+        {% if e.fecha_instalacion %}<dt>Instalado</dt><dd>{{ e.fecha_instalacion|fecha }}</dd>{% endif %}
+        {% if e.nota %}<dt>Nota</dt><dd>{{ e.nota }}</dd>{% endif %}
+      </dl>
+    </div>
+  </div>
+</div>
+{% endblock %}

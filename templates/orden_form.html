@@ -1,0 +1,294 @@
+{% extends "base.html" %}
+{% block title %}{{ 'Editar orden' if o else 'Nueva orden' }}{% endblock %}
+{% block content %}
+{% set p = pre or {} %}
+<div class="page-head">
+  <div><h1>{{ ('Editar orden ' ~ num_orden(o)) if o else 'Nueva orden de servicio' }}</h1>
+    <p>Agenda la visita o registra un servicio ya hecho. Al terminarla se descuentan los materiales y se actualiza el próximo mantenimiento de cada equipo.</p></div>
+  {% if o %}<a class="btn sec" href="{{ url_for('orden_detalle', id=o.id) }}">← Volver</a>{% endif %}
+</div>
+
+<form method="post" id="f" autocomplete="off">
+<input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+<input type="hidden" name="cotizacion_id" value="{{ p.cotizacion_id or '' }}">
+<input type="hidden" name="garantia_de_id" id="garantia_de_id" value="{{ p.garantia_de_id or '' }}">
+<div class="grid g-main">
+<div>
+  <div class="card">
+    <h2 style="margin-bottom:12px">Cliente y visita</h2>
+    {% if p.cotizacion_id %}<div class="note" style="margin-bottom:12px">Se está creando desde una cotización aprobada. Revisa la fecha y el técnico.</div>{% endif %}
+    <div class="form-row">
+      <div class="field" style="grid-column:1/-1"><label for="cliente">Cliente</label>
+        <select class="input" name="cliente_id" id="cliente">
+          <option value="">— Elige el cliente —</option>
+          <option value="nuevo">＋ Cliente nuevo</option>
+          {% for c in clientes %}<option value="{{ c.id }}" {{ 'selected' if p.cliente_id == c.id }}>{{ c.nombre }}{% if c.tel %} · {{ c.tel }}{% endif %}</option>{% endfor %}
+        </select>
+        <div class="hint" id="cliInfo"></div>
+      </div>
+    </div>
+    <div class="form-row" id="cliNuevo" style="display:none">
+      <div class="field"><label>Nombre del cliente nuevo</label><input class="input" name="cliente_nuevo" maxlength="120"></div>
+      <div class="field"><label>Celular</label><input class="input" name="cliente_tel" maxlength="40" inputmode="tel"></div>
+    </div>
+    <div class="form-row">
+      <div class="field"><label for="tipo">Tipo de servicio</label>
+        <select class="input" name="tipo" id="tipo">
+          {% for k, v in TIPOS_SERVICIO.items() %}<option value="{{ k }}" {{ 'selected' if p.tipo == k }}>{{ v }}</option>{% endfor %}
+        </select></div>
+      <div class="field"><label>Fecha de la visita</label><input class="input" type="date" name="fecha" value="{{ p.fecha or hoy }}" required></div>
+      <div class="field"><label>Hora</label><input class="input" type="time" name="hora" value="{{ p.hora or '08:00' }}"></div>
+      <div class="field"><label>Técnico</label>
+        <select class="input" name="tecnico_id" id="tecnico">
+          <option value="">Sin asignar</option>
+          {% for t in tecnicos %}<option value="{{ t.id }}" {{ 'selected' if p.tecnico_id == t.id }}>{{ t.nombre }}</option>{% endfor %}
+        </select></div>
+    </div>
+    <div class="field"><label>Dirección de la visita</label><input class="input" name="direccion" id="direccion" maxlength="200" value="{{ p.direccion or '' }}" placeholder="Se llena con la del cliente"></div>
+    <div class="field" style="margin-bottom:0"><label>Estado</label>
+      <div class="seg" id="estadoSeg">
+        {% for k in ('programada', 'en_proceso', 'terminada') %}
+        <label><input type="radio" name="estado" value="{{ k }}" {{ 'checked' if (p.estado or 'programada') == k }}><span>{{ estados[k][0] }}</span></label>
+        {% endfor %}
+      </div>
+      <div class="hint" id="estadoHint"></div>
+    </div>
+    <div class="form-row" id="finBox" style="display:none;margin-top:12px">
+      <div class="field"><label>Fecha en que se terminó</label><input class="input" type="date" name="fecha_fin" value="{{ p.fecha_fin or '' }}"></div>
+      <div class="field"><label>Hora</label><input class="input" type="time" name="hora_fin" value="{{ p.hora_fin or '' }}"></div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-head"><h2>Equipos y cobro del servicio</h2><span class="muted" style="font-size:.85rem" id="eqHint"></span></div>
+    <div id="garBox" class="gar-box" style="display:none"></div>
+    <div class="eq-pick" id="equipos"></div>
+    <div class="table-wrap" style="margin-top:14px"><table class="lines">
+      <thead><tr><th>Servicio</th><th style="width:70px">Cant.</th><th style="width:140px">Valor</th><th class="num" style="width:110px">Subtotal</th><th></th></tr></thead>
+      <tbody id="lineas"></tbody>
+    </table></div>
+    <button type="button" class="btn sec sm" id="addLinea" style="margin-top:8px">＋ Otro cobro (visita, mano de obra…)</button>
+  </div>
+
+  <div class="card">
+    <div class="card-head"><h2>Materiales y repuestos</h2><span class="muted" style="font-size:.85rem">Salen de la bodega al terminar la orden</span></div>
+    <div class="table-wrap"><table class="lines">
+      <thead><tr><th>Material</th><th style="width:90px">Cant.</th><th style="width:140px">Precio al cliente</th><th class="num" style="width:110px">Subtotal</th><th></th></tr></thead>
+      <tbody id="mats"></tbody>
+    </table></div>
+    <button type="button" class="btn sec sm" id="addMat" style="margin-top:8px">＋ Agregar material</button>
+    {% if not insumos %}<p class="hint">Aún no hay materiales registrados. <a href="{{ url_for('insumo_form') }}">Crea el primero</a>.</p>{% endif %}
+  </div>
+
+  <div class="card">
+    <h2 style="margin-bottom:12px">Detalle del trabajo</h2>
+    <div class="field"><label>Solicitud del cliente / falla reportada</label><textarea class="input" name="descripcion" rows="2">{{ p.descripcion or '' }}</textarea></div>
+    <div class="field"><label>Diagnóstico y trabajo realizado</label><textarea class="input" name="trabajo" rows="3" placeholder="Lo llena el técnico al terminar">{{ p.trabajo or '' }}</textarea></div>
+    <div class="field"><label>Recomendaciones para el cliente</label><textarea class="input" name="recomendaciones" rows="2">{{ p.recomendaciones or '' }}</textarea></div>
+    <div class="field" style="margin-bottom:0"><label>Nota interna (no sale en el documento)</label><input class="input" name="nota" maxlength="255" value="{{ p.nota or '' }}"></div>
+  </div>
+</div>
+
+<div>
+  <div class="card summary">
+    <h2 style="margin-bottom:10px">Resumen</h2>
+    <label class="check" id="garCheck" style="margin-bottom:10px;display:none"><input type="checkbox" name="en_garantia" id="en_garantia" value="1" {{ 'checked' if p.en_garantia }}> Visita en garantía (no se cobra)</label>
+    <div class="sum-line"><span>Servicios</span><b id="sServ">$ 0</b></div>
+    <div class="sum-line"><span>Materiales</span><b id="sMat">$ 0</b></div>
+    <div class="form-row c4" style="margin:8px 0">
+      <div class="field" style="margin:0"><label>Descuento</label><input class="input" name="descuento" id="descuento" inputmode="numeric" value="{{ (p.descuento or 0)|round|int or '' }}"></div>
+      <div class="field" style="margin:0"><label>IVA %</label><input class="input" name="iva_pct" id="iva" inputmode="decimal" value="{{ (p.iva_pct if p.iva_pct is not none else iva_def)|num }}"></div>
+    </div>
+    <div class="sum-line" id="ivaLine" style="display:none"><span>IVA</span><b id="sIva">$ 0</b></div>
+    <div class="sum-total"><span>Total a cobrar</span><span id="sTotal">$ 0</span></div>
+
+    <h3 style="margin:18px 0 8px">Costos internos</h3>
+    <div class="sum-line"><span>Costo de materiales</span><b id="sCosto">$ 0</b></div>
+    <div class="form-row c4" style="margin:8px 0">
+      <div class="field" style="margin:0"><label>Pago al técnico</label><input class="input" name="pago_tecnico" id="pago_tecnico" inputmode="numeric" value="{{ (p.pago_tecnico or 0)|round|int or '' }}"><div class="hint" id="comHint"></div></div>
+      <div class="field" style="margin:0"><label>Transporte / otros</label><input class="input" name="otros_costos" id="otros" inputmode="numeric" value="{{ (p.otros_costos or 0)|round|int or '' }}"></div>
+    </div>
+    <div class="sum-line"><span>Ganancia estimada</span><b id="sGan">$ 0</b></div>
+
+    <h3 style="margin:18px 0 8px">Garantía y pago</h3>
+    <div class="field"><label>Días de garantía que se dan</label><input class="input" name="garantia_dias" id="garantia_dias" inputmode="numeric" value="{{ p.garantia_dias if p.garantia_dias is not none else '' }}"><div class="hint">Si el equipo vuelve a fallar en ese plazo, la app te avisa.</div></div>
+    <div class="field"><div class="seg">
+      <label><input type="radio" name="condicion" value="contado" {{ 'checked' if p.condicion != 'credito' }}><span>Contado</span></label>
+      <label><input type="radio" name="condicion" value="credito" {{ 'checked' if p.condicion == 'credito' }}><span>Crédito</span></label>
+    </div></div>
+    <div class="form-row c4">
+      <div class="field" id="metodoBox"><label>Medio de pago</label><select class="input" name="metodo_pago">
+        {% for m in metodos %}<option {{ 'selected' if p.metodo_pago == m }}>{{ m }}</option>{% endfor %}</select></div>
+      <div class="field" id="plazoBox" style="display:none"><label>Plazo (días)</label><input class="input" name="plazo_dias" id="plazo" inputmode="numeric" value="{{ p.plazo_dias or '' }}"></div>
+    </div>
+    <button class="btn block" id="btnGuardar">Guardar orden</button>
+  </div>
+</div>
+</div>
+</form>
+{% endblock %}
+
+{% block scripts %}
+<script>
+  const CLIENTES = {{ clientes|tojson }}, INSUMOS = {{ insumos|tojson }}, TECNICOS = {{ tecnicos|tojson }};
+  const PRECIOS = {{ precios|tojson }}, TIPOS = {{ TIPOS_SERVICIO|tojson }}, CON_GAR = {{ con_garantia|tojson }};
+  const GAR_DEF = {{ garantia_def }}, PRE = {{ (pre or {})|tojson }}, EDITANDO = {{ 'true' if o else 'false' }};
+  const $ = id => document.getElementById(id), form = $('f');
+  const cliSel = $('cliente'), tipoSel = $('tipo');
+  let cli = null, comisionManual = EDITANDO && val($('pago_tecnico')) > 0, garDiasManual = PRE.garantia_dias !== undefined && PRE.garantia_dias !== null && PRE.garantia_dias !== '';
+
+  function lineaHTML(l) {
+    return `<tr data-eq="${l.equipo || ''}"><td><input type="hidden" name="linea_equipo[]" value="${l.equipo || ''}">
+      <input class="input" name="linea_desc[]" value="${esc(l.desc)}" maxlength="200" required></td>
+      <td><input class="input" name="linea_cant[]" value="${NUM(l.cant || 1)}" inputmode="decimal"></td>
+      <td><input class="input" name="linea_precio[]" value="${l.precio ? Math.round(l.precio) : ''}" inputmode="numeric" placeholder="0"></td>
+      <td class="num sub">$ 0</td><td><button type="button" class="btn-icon" title="Quitar">✕</button></td></tr>`;
+  }
+  function matHTML(m) {
+    const ops = INSUMOS.map(i => `<option value="${i.id}" ${String(i.id) === String(m.insumo) ? 'selected' : ''}>${esc(i.nombre)} (${NUM(i.stock)} ${esc(i.unidad)})</option>`).join('');
+    return `<tr><td><select class="input" name="mat_insumo[]"><option value="">— Elige —</option>${ops}</select></td>
+      <td><input class="input" name="mat_cant[]" value="${m.cant ? NUM(m.cant, 3) : ''}" inputmode="decimal" placeholder="0"></td>
+      <td><input class="input" name="mat_precio[]" value="${m.precio !== undefined && m.precio !== '' ? Math.round(m.precio) : ''}" inputmode="numeric" placeholder="0"></td>
+      <td class="num sub">$ 0</td><td><button type="button" class="btn-icon" title="Quitar">✕</button></td></tr>`;
+  }
+  const precioSugerido = e => (e && e.precios && e.precios[tipoSel.value]) || PRECIOS[tipoSel.value] || 0;
+  const descLinea = e => `${TIPOS[tipoSel.value]} · ${e.corto}`;
+
+  function agregarLinea(l) { $('lineas').insertAdjacentHTML('beforeend', lineaHTML(l)); calcular(); }
+  function quitarLineaEquipo(id) { $('lineas').querySelectorAll(`tr[data-eq="${id}"]`).forEach(tr => tr.remove()); calcular(); }
+
+  function pintarEquipos(marcados) {
+    const box = $('equipos');
+    if (!cli) { box.innerHTML = '<div class="muted">Elige el cliente para ver sus equipos.</div>'; $('eqHint').textContent = ''; return; }
+    if (!cli.equipos.length) {
+      box.innerHTML = `<div class="note">Este cliente no tiene equipos registrados. <a href="/clientes/${cli.id}/equipos/nuevo">Agrégalos</a> para llevar su plan de mantenimiento, o usa «Otro cobro».</div>`;
+      $('eqHint').textContent = ''; return;
+    }
+    $('eqHint').textContent = 'Marca los equipos que se atienden';
+    box.innerHTML = cli.equipos.map(e => `<label><input type="checkbox" value="${e.id}" ${marcados.includes(e.id) ? 'checked' : ''}>
+      <span>${esc(e.nombre)}</span>${e.gar ? `<span class="badge warn">Garantía hasta ${e.gar.hasta}</span>` : ''}
+      <span class="badge ${e.cls}">${esc(e.est)}</span></label>`).join('');
+    box.querySelectorAll('input').forEach(ch => ch.addEventListener('change', () => {
+      const e = cli.equipos.find(x => x.id === +ch.value);
+      if (ch.checked) agregarLinea({ equipo: e.id, desc: descLinea(e), cant: 1, precio: $('en_garantia').checked ? 0 : precioSugerido(e) });
+      else quitarLineaEquipo(e.id);
+      revisarGarantia();
+    }));
+  }
+
+  function elegirCliente(primeraVez) {
+    const v = cliSel.value;
+    $('cliNuevo').style.display = v === 'nuevo' ? '' : 'none';
+    cli = CLIENTES.find(c => String(c.id) === v) || null;
+    $('cliInfo').innerHTML = cli ? esc([cli.tel, cli.dir].filter(Boolean).join(' · ')) + ` · <a href="/clientes/${cli.id}" target="_blank">ver ficha</a>` : '';
+    if (cli && (!primeraVez || !$('direccion').value)) $('direccion').value = cli.dir || '';
+    if (cli && !primeraVez) { $('lineas').innerHTML = ''; }
+    if (cli && cli.plazo && !$('plazo').value) $('plazo').value = cli.plazo;
+    const marcados = [...$('lineas').querySelectorAll('tr[data-eq]')].map(tr => +tr.dataset.eq).filter(Boolean);
+    pintarEquipos(marcados);
+    revisarGarantia();
+    calcular();
+  }
+
+  function revisarGarantia() {
+    const ids = [...$('equipos').querySelectorAll('input:checked')].map(x => +x.value);
+    const con = cli ? cli.equipos.filter(e => ids.includes(e.id) && e.gar) : [];
+    const mostrar = con.length && ['correctivo', 'diagnostico', 'gas'].includes(tipoSel.value);
+    $('garBox').style.display = mostrar ? '' : 'none';
+    $('garCheck').style.display = (mostrar || $('en_garantia').checked) ? '' : 'none';
+    if (mostrar) {
+      $('garBox').innerHTML = '⚠ <b>Equipo en garantía.</b> ' + con.map(e => `${esc(e.corto)}: orden <a href="/ordenes/${e.gar.id}" target="_blank">${e.gar.num}</a> con garantía hasta el ${e.gar.hasta}.`).join(' ')
+        + ' Si es la misma falla, marca <b>«Visita en garantía»</b> en el resumen: no se le cobra al cliente.';
+      if ($('en_garantia').checked && !$('garantia_de_id').value) $('garantia_de_id').value = con[0].gar.id;
+    }
+  }
+
+  function calcular() {
+    let serv = 0, mat = 0, costo = 0;
+    const enGar = $('en_garantia').checked;
+    $('lineas').querySelectorAll('tr').forEach(tr => {
+      const [c, pr] = [tr.querySelector('[name="linea_cant[]"]'), tr.querySelector('[name="linea_precio[]"]')];
+      if (enGar) pr.value = 0;
+      const s = (val(c) || 0) * val(pr); serv += s; tr.querySelector('.sub').textContent = COP(s);
+    });
+    $('mats').querySelectorAll('tr').forEach(tr => {
+      const ins = INSUMOS.find(i => String(i.id) === tr.querySelector('select').value);
+      const c = val(tr.querySelector('[name="mat_cant[]"]')), pr = tr.querySelector('[name="mat_precio[]"]');
+      if (enGar) pr.value = 0;
+      const s = c * val(pr); mat += s; costo += c * (ins ? ins.costo : 0);
+      tr.querySelector('.sub').textContent = COP(s);
+      tr.querySelector('[name="mat_cant[]"]').style.borderColor = ins && c > ins.stock + 1e-9 ? 'var(--err)' : '';
+    });
+    const desc = Math.min(val($('descuento')), serv + mat), neto = serv + mat - desc, iva = Math.round(neto * val($('iva')) / 100);
+    $('sServ').textContent = COP(serv); $('sMat').textContent = COP(mat);
+    $('ivaLine').style.display = iva ? '' : 'none'; $('sIva').textContent = COP(iva);
+    $('sTotal').textContent = COP(neto + iva); $('sCosto').textContent = COP(costo);
+    const tec = TECNICOS.find(t => String(t.id) === $('tecnico').value);
+    let sug = 0;
+    if (tec && tec.tipo !== 'fijo' && tec.cval) sug = tec.ctipo === 'pct' ? Math.round(Math.max(serv - (enGar ? 0 : 0), 0) * tec.cval / 100) : tec.cval;
+    $('comHint').textContent = tec ? (tec.tipo === 'fijo' ? 'Tiene salario fijo' : (tec.ctipo === 'pct' ? `${NUM(tec.cval)}% del servicio` : `${COP(tec.cval)} por servicio`) + (sug ? ` = ${COP(sug)}` : '')) : '';
+    if (!comisionManual) $('pago_tecnico').value = sug ? Math.round(sug) : '';
+    $('sGan').textContent = COP(neto - costo - val($('pago_tecnico')) - val($('otros')));
+    const credito = form.querySelector('[name=condicion]:checked').value === 'credito';
+    $('plazoBox').style.display = credito ? '' : 'none'; $('metodoBox').style.display = credito ? 'none' : '';
+    const est = form.querySelector('[name=estado]:checked').value;
+    $('finBox').style.display = est === 'terminada' ? '' : 'none';
+    $('estadoHint').textContent = est === 'terminada' ? 'Al guardar como terminada se descuentan los materiales, cuenta como ingreso y se actualiza el próximo mantenimiento.' :
+      (est === 'en_proceso' ? 'El técnico está trabajando en ella.' : 'Queda en la agenda del técnico.');
+    if (!garDiasManual) $('garantia_dias').value = enGar ? 0 : (CON_GAR.includes(tipoSel.value) ? GAR_DEF : 0);
+  }
+
+  // Eventos
+  cliSel.addEventListener('change', () => elegirCliente(false));
+  tipoSel.addEventListener('change', () => {
+    $('lineas').querySelectorAll('tr[data-eq]').forEach(tr => {
+      const e = cli && cli.equipos.find(x => x.id === +tr.dataset.eq);
+      if (e) { tr.querySelector('[name="linea_desc[]"]').value = descLinea(e);
+               if (!$('en_garantia').checked) tr.querySelector('[name="linea_precio[]"]').value = precioSugerido(e) || ''; }
+    });
+    revisarGarantia(); calcular();
+  });
+  $('en_garantia').addEventListener('change', () => {
+    if (!$('en_garantia').checked) $('garantia_de_id').value = ''; else revisarGarantia();
+    garDiasManual = false; calcular();
+  });
+  $('pago_tecnico').addEventListener('input', () => { comisionManual = true; });
+  $('garantia_dias').addEventListener('input', () => { garDiasManual = true; });
+  $('tecnico').addEventListener('change', () => { comisionManual = false; calcular(); });
+  form.addEventListener('input', calcular);
+  form.addEventListener('change', e => {
+    if (e.target.matches('#mats select')) {
+      const ins = INSUMOS.find(i => String(i.id) === e.target.value), tr = e.target.closest('tr');
+      if (ins) tr.querySelector('[name="mat_precio[]"]').value = $('en_garantia').checked ? 0 : Math.round(ins.precio) || '';
+      if (ins && !val(tr.querySelector('[name="mat_cant[]"]'))) tr.querySelector('[name="mat_cant[]"]').value = 1;
+    }
+    calcular();
+  });
+  form.addEventListener('click', e => {
+    const b = e.target.closest('.btn-icon'); if (!b) return;
+    const tr = b.closest('tr');
+    if (tr.dataset.eq) { const ch = $('equipos').querySelector(`input[value="${tr.dataset.eq}"]`); if (ch) ch.checked = false; }
+    tr.remove(); revisarGarantia(); calcular();
+  });
+  $('addLinea').addEventListener('click', () => agregarLinea({ desc: '', cant: 1, precio: '' }));
+  $('addMat').addEventListener('click', () => { $('mats').insertAdjacentHTML('beforeend', matHTML({})); calcular(); });
+  form.addEventListener('submit', e => {
+    if (!cliSel.value) { e.preventDefault(); alert('Elige el cliente.'); return; }
+    if (!$('lineas').querySelector('tr')) { e.preventDefault(); alert('Marca al menos un equipo o agrega un cobro.'); return; }
+    $('btnGuardar').disabled = true; $('btnGuardar').textContent = 'Guardando…';
+  });
+
+  // Estado inicial
+  (PRE.lineas || []).forEach(l => $('lineas').insertAdjacentHTML('beforeend', lineaHTML(l)));
+  (PRE.materiales || []).forEach(m => $('mats').insertAdjacentHTML('beforeend', matHTML(m)));
+  elegirCliente(true);
+  if ((PRE.equipos || []).length && cli) {
+    PRE.equipos.forEach(id => {
+      const ch = $('equipos').querySelector(`input[value="${id}"]`);
+      if (ch && !ch.checked) { ch.checked = true; ch.dispatchEvent(new Event('change')); }
+    });
+  }
+  if (PRE.en_garantia) { $('en_garantia').checked = true; }
+  revisarGarantia(); calcular();
+</script>
+{% endblock %}

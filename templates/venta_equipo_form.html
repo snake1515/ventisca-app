@@ -1,0 +1,102 @@
+{% extends "base.html" %}
+{% block title %}{{ 'Editar venta' if v else 'Venta de equipo' }}{% endblock %}
+{% block content %}
+{% set F = request.form %}
+{% macro val_(campo, defecto='') %}{{ F[campo] if F else ((v[campo] if v and v[campo] is not none else defecto)) }}{% endmacro %}
+<div class="page-head"><div><h1>{{ ('Editar venta ' ~ v.numero) if v else 'Registrar venta de equipo' }}</h1>
+  <p>Anota lo que te costó con el proveedor y lo que pagó el cliente: la app calcula tu ganancia.</p></div></div>
+<form method="post" id="f" autocomplete="off">
+<input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+<div class="grid g-main">
+<div>
+  <div class="card">
+    <h2 style="margin-bottom:12px">Cliente</h2>
+    <div class="form-row">
+      <div class="field"><label>Cliente</label><select class="input" name="cliente_id" id="cliente">
+        <option value="">— Elige el cliente —</option><option value="nuevo">＋ Cliente nuevo</option>
+        {% set sc = (F.cliente_id|int if F.cliente_id and F.cliente_id != 'nuevo' else (v.cliente_id if v else pre_cliente)) %}
+        {% for c in clientes %}<option value="{{ c.id }}" {{ 'selected' if sc == c.id }}>{{ c.nombre }}{% if c.tel %} · {{ c.tel }}{% endif %}</option>{% endfor %}</select></div>
+      <div class="field"><label>Fecha</label><input class="input" type="date" name="fecha" value="{{ F.fecha or (v.fecha.date().isoformat() if v else hoy) }}"></div>
+    </div>
+    <div class="form-row" id="cliNuevo" style="display:none">
+      <div class="field"><label>Nombre del cliente nuevo</label><input class="input" name="cliente_nuevo" value="{{ F.cliente_nuevo or '' }}"></div>
+      <div class="field"><label>Celular</label><input class="input" name="cliente_tel" value="{{ F.cliente_tel or '' }}"></div>
+    </div>
+  </div>
+  <div class="card">
+    <h2 style="margin-bottom:12px">Equipo</h2>
+    <div class="form-row">
+      <div class="field"><label>Tipo</label><select class="input" name="tipo">{% set st = F.tipo or (v.tipo if v else tipos[0]) %}{% for t in tipos %}<option {{ 'selected' if t == st }}>{{ t }}</option>{% endfor %}</select></div>
+      <div class="field"><label>Capacidad (BTU)</label><input class="input" name="capacidad_btu" list="btus" inputmode="numeric" value="{{ val_('capacidad_btu') }}"><datalist id="btus">{% for b in capacidades %}<option value="{{ b }}">{% endfor %}</datalist></div>
+      <div class="field"><label>Cantidad</label><input class="input" type="number" min="1" name="cantidad" value="{{ val_('cantidad', 1) }}"></div>
+    </div>
+    <div class="form-row">
+      <div class="field"><label>Marca</label><input class="input" name="marca" value="{{ val_('marca') }}"></div>
+      <div class="field"><label>Modelo / referencia</label><input class="input" name="modelo" value="{{ val_('modelo') }}"></div>
+      <div class="field" style="display:flex;align-items:flex-end"><label class="check"><input type="checkbox" name="inverter" value="1" {{ 'checked' if (F.inverter if F else (v.inverter if v else False)) }}> Inverter</label></div>
+    </div>
+    <div class="form-row">
+      <div class="field"><label>Proveedor</label><input class="input" name="proveedor" value="{{ val_('proveedor') }}" placeholder="A quién se lo compraste"></div>
+      <div class="field"><label>Garantía de fábrica (meses)</label><input class="input" type="number" min="0" name="garantia_meses" value="{{ val_('garantia_meses', 12) }}"></div>
+    </div>
+  </div>
+
+  {% if not v %}
+  <div class="card">
+    <label class="check"><input type="checkbox" name="registrar_equipo" id="regEq" value="1" checked> Agregar el equipo a la ficha del cliente (para su plan de mantenimiento)</label>
+    <div id="regBox" style="margin-top:12px">
+      <div class="form-row">
+        <div class="field"><label>Ubicación</label><input class="input" name="ubicacion" placeholder="Ej: Alcoba principal"></div>
+        <div class="field"><label>Mantenimiento preventivo</label><select class="input" name="frecuencia_meses">
+          <option value="0">Sin plan</option>{% for k, t in frecuencias.items() %}<option value="{{ k }}" {{ 'selected' if k == frec_def }}>{{ t }}</option>{% endfor %}</select></div>
+      </div>
+      <label class="check"><input type="checkbox" name="programar_instalacion" id="progInst" value="1" checked> Agendar la instalación</label>
+      <div class="form-row" id="instBox" style="margin-top:10px">
+        <div class="field"><label>Fecha</label><input class="input" type="date" name="fecha_inst" value="{{ hoy }}"></div>
+        <div class="field"><label>Hora</label><input class="input" type="time" name="hora_inst" value="09:00"></div>
+        <div class="field"><label>Técnico</label><select class="input" name="tecnico_id"><option value="">Sin asignar</option>{% for t in tecnicos %}<option value="{{ t.id }}">{{ t.nombre }}</option>{% endfor %}</select></div>
+        <div class="field"><label>Valor de la instalación (por equipo)</label><input class="input" name="precio_instalacion" inputmode="numeric" value="{{ precio_inst|round|int or '' }}"><div class="hint">0 si va incluida en el precio del equipo.</div></div>
+      </div>
+    </div>
+  </div>
+  {% endif %}
+  <div class="card"><div class="field" style="margin:0"><label>Nota</label><input class="input" name="nota" value="{{ val_('nota') }}"></div></div>
+</div>
+<div>
+  <div class="card summary">
+    <h2 style="margin-bottom:10px">Valores</h2>
+    <div class="field"><label>Lo que pagaste al proveedor (total)</label><input class="input" name="costo_total" id="costo" inputmode="numeric" value="{{ (val_('costo_total')|float)|round|int or '' }}"></div>
+    <div class="field"><label>Flete, transporte u otros costos</label><input class="input" name="otros_costos" id="otros" inputmode="numeric" value="{{ (val_('otros_costos')|float)|round|int or '' }}"></div>
+    <div class="field"><label>Precio al cliente (total, sin IVA)</label><input class="input" name="precio_total" id="precio" inputmode="numeric" value="{{ (val_('precio_total')|float)|round|int or '' }}" required></div>
+    <div class="field"><label>IVA %</label><input class="input" name="iva_pct" id="iva" inputmode="decimal" value="{{ F.iva_pct or ((v.iva_pct if v else iva_def)|num) }}"></div>
+    <div class="sum-line"><span>Total a cobrar</span><b id="sTotal">$ 0</b></div>
+    <div class="sum-total"><span>Tu ganancia</span><span id="sGan">$ 0</span></div>
+    <div class="field" style="margin-top:14px"><div class="seg">
+      {% set cond = F.condicion or (v.condicion if v else 'contado') %}
+      <label><input type="radio" name="condicion" value="contado" {{ 'checked' if cond != 'credito' }}><span>Contado</span></label>
+      <label><input type="radio" name="condicion" value="credito" {{ 'checked' if cond == 'credito' }}><span>Crédito</span></label></div></div>
+    <div class="form-row c4">
+      <div class="field" id="metodoBox"><label>Medio de pago</label><select class="input" name="metodo_pago">{% for m in metodos %}<option {{ 'selected' if (F.metodo_pago or (v.metodo_pago if v else '')) == m }}>{{ m }}</option>{% endfor %}</select></div>
+      <div class="field" id="plazoBox"><label>Plazo (días)</label><input class="input" name="plazo_dias" inputmode="numeric" value="{{ F.plazo_dias or (((v.vence - v.fecha.date()).days) if v and v.vence else '') }}"></div>
+    </div>
+    <button class="btn block">Guardar venta</button>
+  </div>
+</div>
+</div>
+</form>
+{% endblock %}
+{% block scripts %}
+<script>
+  const $ = id => document.getElementById(id), f = $('f');
+  function calc() {
+    const p = val($('precio')), iva = Math.round(p * val($('iva')) / 100), g = p - val($('costo')) - val($('otros'));
+    $('sTotal').textContent = COP(p + iva); $('sGan').textContent = COP(g) + (p ? ` (${NUM(g / p * 100, 1)}%)` : '');
+    $('sGan').className = g >= 0 ? 'pos' : 'neg';
+    const cred = f.querySelector('[name=condicion]:checked').value === 'credito';
+    $('plazoBox').style.display = cred ? '' : 'none'; $('metodoBox').style.display = cred ? 'none' : '';
+    $('cliNuevo').style.display = $('cliente').value === 'nuevo' ? '' : 'none';
+    if ($('regEq')) { $('regBox').style.display = $('regEq').checked ? '' : 'none'; $('instBox').style.display = $('progInst').checked ? '' : 'none'; }
+  }
+  f.addEventListener('input', calc); f.addEventListener('change', calc); calc();
+</script>
+{% endblock %}

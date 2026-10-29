@@ -1,0 +1,44 @@
+{% extends "base.html" %}
+{% block title %}Materiales y repuestos{% endblock %}
+{% block content %}
+<div class="page-head">
+  <div><h1>Materiales y repuestos</h1><p>Gas, tubería, capacitores, filtros y repuestos en bodega, valorizados a costo promedio</p></div>
+  <div class="actions">
+    <a class="btn sec" href="{{ url_for('compra_nueva') }}">⇣ Registrar compra</a>
+    <a class="btn" href="{{ url_for('insumo_form') }}">＋ Nuevo material</a>
+  </div>
+</div>
+<div class="card">
+  <div class="card-head">
+    <form class="filters" method="get"><input class="input" name="q" value="{{ q }}" placeholder="Buscar material…" style="min-width:0;flex:1 1 200px">
+      <select class="input" name="cat" style="width:auto"><option value="">Todas las categorías</option>{% for c in categorias %}<option {{ 'selected' if c == cat }}>{{ c }}</option>{% endfor %}</select>
+      <button class="btn sec sm">Buscar</button></form>
+    <span class="badge info">Valor en bodega: {{ total|cop }}</span>
+  </div>
+  <div class="table-wrap"><table>
+    <thead><tr><th>Material</th><th class="num">Stock</th><th class="num">Usado este mes</th><th class="num">Costo prom.</th><th class="num">Precio al cliente</th><th class="num">Valor</th><th>Estado</th><th></th></tr></thead>
+    <tbody>
+    {% for i in items %}
+      <tr>
+        <td><b>{{ i.nombre }}</b><br><small>{{ i.categoria or 'Otros' }}</small></td>
+        <td class="num">{{ i.stock|num(3) }} {{ i.unidad }}</td>
+        <td class="num">{{ (uso_mes.get(i.id) or 0)|num(3) }}</td>
+        <td class="num">{{ i.costo_promedio|cop }}</td>
+        <td class="num">{{ i.precio_venta|cop if i.precio_venta else '—' }}</td>
+        <td class="num">{{ i.valor_stock|cop }}</td>
+        <td>{% if i.stock <= 0 %}<span class="badge err">Agotado</span>{% elif i.bajo_minimo %}<span class="badge warn">Bajo mínimo</span>{% else %}<span class="badge ok">OK</span>{% endif %}</td>
+        <td class="r" style="white-space:nowrap">
+          <a class="btn sec sm" href="{{ url_for('insumo_form', id=i.id) }}">Editar</a>
+          {% if puede('admin') %}
+          <form method="post" action="{{ url_for('insumo_eliminar', id=i.id) }}" style="display:inline" onsubmit="return confirm('¿Eliminar {{ i.nombre }}?')">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><button class="btn-icon" title="Eliminar">✕</button></form>
+          {% endif %}
+        </td>
+      </tr>
+    {% else %}
+      <tr><td colspan="8" class="empty">No hay materiales. Crea el primero: gas R-410A, tubería de cobre, capacitores, filtros…</td></tr>
+    {% endfor %}
+    </tbody>
+  </table></div>
+</div>
+{% endblock %}

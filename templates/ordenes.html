@@ -1,0 +1,52 @@
+{% extends "base.html" %}
+{% block title %}Órdenes de servicio{% endblock %}
+{% block content %}
+<div class="page-head">
+  <div><h1>Órdenes de servicio</h1><p>Historial del {{ desde }} al {{ hasta }}</p></div>
+  <a class="btn" href="{{ url_for('orden_nueva') }}">＋ Nueva orden</a>
+</div>
+<form class="filters card" method="get" style="margin-bottom:16px">
+  <div class="field"><label>Desde</label><input class="input" type="date" name="desde" value="{{ desde }}"></div>
+  <div class="field"><label>Hasta</label><input class="input" type="date" name="hasta" value="{{ hasta }}"></div>
+  <div class="field"><label>Servicio</label><select class="input" name="tipo"><option value="">Todos</option>
+    {% for k, v in TIPOS_SERVICIO.items() %}<option value="{{ k }}" {{ 'selected' if tipo == k }}>{{ v }}</option>{% endfor %}</select></div>
+  <div class="field"><label>Estado</label><select class="input" name="estado"><option value="">Todos</option>
+    {% for k, v in estados.items() %}<option value="{{ k }}" {{ 'selected' if estado == k }}>{{ v[0] }}</option>{% endfor %}
+    <option value="anulada" {{ 'selected' if estado == 'anulada' }}>Anulada</option></select></div>
+  <div class="field"><label>Técnico</label><select class="input" name="tecnico"><option value="">Todos</option>
+    {% for t in tecnicos %}<option value="{{ t.id }}" {{ 'selected' if tecnico_id == t.id }}>{{ t.nombre }}</option>{% endfor %}</select></div>
+  <div class="field"><label>Cliente</label><input class="input" name="q" value="{{ q }}" placeholder="Buscar"></div>
+  <button class="btn sec">Filtrar</button>
+</form>
+
+<div class="kpis">
+  <div class="kpi"><div class="lbl">Terminadas</div><div class="val">{{ n_hechas }}</div><div class="sub">de {{ items|length }} en la lista</div></div>
+  <div class="kpi"><div class="lbl">Cobrado (sin IVA)</div><div class="val">{{ total|cop }}</div></div>
+  <div class="kpi"><div class="lbl">Ganancia</div><div class="val {{ 'pos' if ganancia >= 0 else 'neg' }}">{{ ganancia|cop }}</div></div>
+  <div class="kpi"><div class="lbl">Por cobrar</div><div class="val">{{ saldo|cop }}</div></div>
+</div>
+
+<div class="card">
+  <div class="table-wrap"><table>
+    <thead><tr><th>Orden</th><th>Fecha</th><th>Cliente</th><th>Servicio</th><th>Técnico</th><th class="num">Equipos</th><th class="num">Total</th>{% if puede('admin') %}<th class="num">Ganancia</th>{% endif %}<th>Estado</th><th>Pago</th></tr></thead>
+    <tbody>
+    {% for o in items %}
+      <tr class="{{ 'anulada' if o.anulada }}" style="cursor:pointer" onclick="location.href='{{ url_for('orden_detalle', id=o.id) }}'">
+        <td><a href="{{ url_for('orden_detalle', id=o.id) }}"><b>{{ num_orden(o) }}</b></a></td>
+        <td>{{ (o.fecha_fin or o.fecha)|fecha }}</td>
+        <td>{{ o.cliente_nombre }}</td>
+        <td>{{ o.tipo_txt }}{% if o.en_garantia %} <span class="badge warn">garantía</span>{% endif %}</td>
+        <td>{{ o.tecnico.nombre if o.tecnico else '—' }}</td>
+        <td class="num">{{ o.equipos|length }}</td>
+        <td class="num"><b>{{ o.total_factura|cop }}</b></td>
+        {% if puede('admin') %}<td class="num">{{ o.ganancia|cop if o.terminada else '—' }}</td>{% endif %}
+        <td><span class="badge {{ o.estado_info[1] }}">{{ o.estado_info[0] }}</span></td>
+        <td>{% if o.estado == 'terminada' and not o.anulada %}<span class="badge {{ o.estado_pago[1] }}">{{ o.estado_pago[0] }}</span>{% endif %}</td>
+      </tr>
+    {% else %}
+      <tr><td colspan="10" class="empty">No hay órdenes con esos filtros.</td></tr>
+    {% endfor %}
+    </tbody>
+  </table></div>
+</div>
+{% endblock %}

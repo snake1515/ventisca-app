@@ -1,0 +1,180 @@
+{% extends "base.html" %}
+{% block title %}Orden {{ num_orden(o) }}{% endblock %}
+{% block content %}
+{% set abierta = not o.anulada and o.estado in ('programada', 'en_proceso') %}
+<div class="page-head">
+  <div>
+    <h1>Orden {{ num_orden(o) }} <span class="badge {{ o.estado_info[1] }}" style="vertical-align:middle">{{ o.estado_info[0] }}</span>
+      {% if o.en_garantia %}<span class="badge warn" style="vertical-align:middle">En garantía</span>{% endif %}</h1>
+    <p>{{ o.tipo_txt }} · {{ o.cliente_nombre }} · {{ o.fecha|cuando }} · {{ o.fecha|hora }}</p>
+  </div>
+  <div class="actions">
+    {% if wa_cli %}<a class="btn wa" href="{{ wa_cli }}" target="_blank" rel="noopener">WhatsApp al cliente</a>{% endif %}
+    <a class="btn sec" href="{{ url_for('orden_documento', id=o.id, fmt='pdf') }}" target="_blank">PDF</a>
+    <a class="btn sec" href="{{ url_for('orden_documento', id=o.id, fmt='jpg') }}" target="_blank" title="Imagen para enviar por WhatsApp">Imagen</a>
+    {% if puede('admin', 'asesor') and not o.anulada and not o.nomina_id %}<a class="btn sec" href="{{ url_for('orden_editar', id=o.id) }}">Editar</a>{% endif %}
+  </div>
+</div>
+
+{% if o.en_garantia and o.garantia_de %}
+<div class="gar-box">Visita cubierta por la garantía de la orden <a href="{{ url_for('orden_detalle', id=o.garantia_de.id) }}"><b>{{ num_orden(o.garantia_de) }}</b></a> ({{ o.garantia_de.tipo_txt|lower }} del {{ o.garantia_de.fecha_fin|fecha }}). No se le cobra al cliente.</div>
+{% endif %}
+{% for e, gv in avisos_gar %}
+<div class="gar-box">⚠ <b>{{ e.corto }}</b> tiene garantía vigente hasta el {{ gv.garantia_hasta|fecha }} por la orden
+  <a href="{{ url_for('orden_detalle', id=gv.id) }}">{{ num_orden(gv) }}</a>. Si es la misma falla,
+  {% if puede('admin', 'asesor') %}<a href="{{ url_for('orden_editar', id=o.id) }}">márcala como visita en garantía</a>{% else %}avísale a la oficina{% endif %} para no cobrarla.</div>
+{% endfor %}
+
+<div class="grid g-main">
+<div>
+  <div class="card">
+    <div class="card-head"><h2>Cliente y visita</h2>
+      {% if puede('admin', 'asesor') and o.cliente %}<a class="btn sec sm" href="{{ url_for('cliente_detalle', id=o.cliente_id) }}">Ficha del cliente</a>{% endif %}</div>
+    <dl class="kv">
+      <dt>Cliente</dt><dd><b>{{ o.cliente_nombre }}</b>{% if o.cliente and o.cliente.contacto %} · {{ o.cliente.contacto }}{% endif %}</dd>
+      {% if o.cliente and o.cliente.telefono %}<dt>Teléfono</dt><dd><a href="tel:{{ o.cliente.telefono|replace(' ', '') }}">{{ o.cliente.telefono }}</a>{% if o.cliente.whatsapp %} · <a href="{{ o.cliente.whatsapp }}" target="_blank" rel="noopener">WhatsApp</a>{% endif %}</dd>{% endif %}
+      {% if o.direccion %}<dt>Dirección</dt><dd>{{ o.direccion }} · <a href="https://www.google.com/maps/search/?api=1&query={{ (o.direccion ~ ' ' ~ (o.cliente.ciudad if o.cliente and o.cliente.ciudad else ''))|urlencode }}" target="_blank" rel="noopener">Ver en el mapa</a></dd>{% endif %}
+      <dt>Programada</dt><dd>{{ o.fecha|cuando }} a las {{ o.fecha|hora }}</dd>
+      {% if o.fecha_fin %}<dt>Terminada</dt><dd>{{ o.fecha_fin|fecha(true) }}</dd>{% endif %}
+      <dt>Técnico</dt><dd>{{ o.tecnico.nombre if o.tecnico else 'Sin asignar' }}{% if wa_tec and puede('admin', 'asesor') %} · <a href="{{ wa_tec }}" target="_blank" rel="noopener">WhatsApp</a>{% endif %}</dd>
+      {% if o.cotizacion_id %}<dt>Cotización</dt><dd><a href="{{ url_for('cotizacion_detalle', id=o.cotizacion_id) }}">Ver cotización aprobada</a></dd>{% endif %}
+    </dl>
+  </div>
+
+  {% if o.equipos %}
+  <div class="card">
+    <h2 style="margin-bottom:10px">Equipos atendidos</h2>
+    {% for e in o.equipos %}
+    <div class="equipo-card">
+      <div class="equipo-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><rect x="2" y="5" width="20" height="9" rx="2"/><path d="M6 11h12M7 18l1-2M12 19v-3M17 18l-1-2"/></svg></div>
+      <div style="flex:1;min-width:0">
+        <b>{% if puede('admin', 'asesor') %}<a href="{{ url_for('equipo_detalle', id=e.id) }}">{{ e.nombre }}</a>{% else %}{{ e.nombre }}{% endif %}</b>
+        <div class="muted" style="font-size:.86rem">{{ [e.modelo, e.refrigerante, 'Inverter' if e.inverter else None, ('Serie ' ~ e.serial) if e.serial else None]|select|join(' · ') or 'Sin datos técnicos' }}</div>
+        {% if e.proximo_preventivo %}<div style="font-size:.86rem">Próximo preventivo: <b>{{ e.proximo_preventivo|fecha }}</b>{% if e.ultimo_preventivo %} · último {{ e.ultimo_preventivo|fecha }}{% endif %}</div>{% endif %}
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+  {% endif %}
+
+  <div class="card">
+    <h2 style="margin-bottom:8px">Servicios y materiales</h2>
+    <div class="table-wrap"><table>
+      <thead><tr><th>Descripción</th><th class="num">Cant.</th><th class="num">Valor</th><th class="num">Subtotal</th></tr></thead>
+      <tbody>
+        {% for l in o.lineas %}<tr><td>{{ l.descripcion }}</td><td class="num">{{ l.cantidad|num }}</td><td class="num">{{ l.precio|cop }}</td><td class="num"><b>{{ l.subtotal|cop }}</b></td></tr>{% endfor %}
+        {% for m in o.materiales %}<tr><td>{{ m.insumo.nombre }} <span class="badge gray">material</span></td><td class="num">{{ m.cantidad|num(3) }} {{ m.insumo.unidad }}</td><td class="num">{{ m.precio_unitario|cop }}</td><td class="num"><b>{{ m.subtotal|cop }}</b></td></tr>{% endfor %}
+      </tbody>
+      <tfoot>
+        {% if o.descuento %}<tr><td colspan="3">Descuento</td><td class="num">-{{ o.descuento|cop }}</td></tr>{% endif %}
+        {% if o.iva %}<tr><td colspan="3">IVA {{ o.iva_pct|num }}%</td><td class="num">{{ o.iva|cop }}</td></tr>{% endif %}
+        <tr><td colspan="3">Total</td><td class="num">{{ o.total_factura|cop }}</td></tr>
+      </tfoot>
+    </table></div>
+  </div>
+
+  {% if o.descripcion or o.trabajo or o.recomendaciones %}
+  <div class="card">
+    {% if o.descripcion %}<h3>Solicitud del cliente</h3><p class="texto" style="margin:4px 0 14px">{{ o.descripcion }}</p>{% endif %}
+    {% if o.trabajo %}<h3>Trabajo realizado</h3><p class="texto" style="margin:4px 0 14px">{{ o.trabajo }}</p>{% endif %}
+    {% if o.recomendaciones %}<h3>Recomendaciones</h3><p class="texto" style="margin:4px 0 0">{{ o.recomendaciones }}</p>{% endif %}
+  </div>
+  {% endif %}
+
+  {% if abierta %}
+  <div class="card" id="terminar" style="border-color:#bfe6d2">
+    <h2 style="margin-bottom:6px">Terminar la orden</h2>
+    <p class="muted" style="margin-top:0">Escribe lo que se hizo. Si usaste materiales que no están arriba, agrégalos aquí.</p>
+    <form method="post" action="{{ url_for('orden_terminar', id=o.id) }}" id="fTerminar">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <div class="field"><label>Diagnóstico y trabajo realizado</label><textarea class="input" name="trabajo" rows="3" required>{{ o.trabajo or '' }}</textarea></div>
+      <div class="field"><label>Recomendaciones al cliente</label><textarea class="input" name="recomendaciones" rows="2">{{ o.recomendaciones or '' }}</textarea></div>
+      <div class="table-wrap"><table class="lines"><tbody id="matsT"></tbody></table></div>
+      <button type="button" class="btn sec sm" id="addMatT">＋ Material usado</button>
+      <button class="btn block" style="margin-top:14px">✔ Marcar como terminada</button>
+    </form>
+  </div>
+  {% endif %}
+</div>
+
+<div>
+  <div class="card summary">
+    <h2 style="margin-bottom:10px">Cobro</h2>
+    <div class="big-num">{{ o.total_factura|cop }}</div>
+    <div class="muted" style="margin-bottom:10px">{{ 'Crédito' if o.condicion == 'credito' else ('Contado · ' ~ (o.metodo_pago or '')) }}{% if o.vence %} · vence {{ o.vence|fecha }}{% endif %}</div>
+    {% if o.estado == 'terminada' %}<div style="margin-bottom:10px"><span class="badge {{ o.estado_pago[1] }}">{{ o.estado_pago[0] }}</span></div>{% endif %}
+    {% if o.condicion == 'credito' and o.estado == 'terminada' %}
+      <div class="sum-line"><span>Abonado</span><b>{{ o.pagado|cop }}</b></div>
+      <div class="sum-line"><span>Saldo</span><b class="{{ 'neg' if o.saldo > 0.5 }}">{{ o.saldo|cop }}</b></div>
+      {% for a in o.abonos %}
+      <div class="sum-line" style="font-size:.86rem"><span class="{{ 'muted' if a.anulado }}" style="{{ 'text-decoration:line-through' if a.anulado }}">{{ a.fecha|fecha }} · {{ a.metodo }}</span>
+        <span><b>{{ a.valor|cop }}</b>{% if puede('admin') and not a.anulado %}
+          <form method="post" action="{{ url_for('abono_anular', id=a.id) }}" style="display:inline" onsubmit="return confirm('¿Anular este abono?')"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><button class="btn-icon" title="Anular abono">✕</button></form>{% endif %}</span></div>
+      {% endfor %}
+      {% if o.saldo > 0.5 and puede('admin', 'asesor') %}
+      <form method="post" action="{{ url_for('abono_nuevo', tipo='orden', id=o.id) }}" style="margin-top:12px">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <div class="form-row c4">
+          <div class="field"><label>Abono</label><input class="input" name="valor" inputmode="numeric" value="{{ o.saldo|round|int }}"></div>
+          <div class="field"><label>Medio</label><select class="input" name="metodo">{% for m in metodos %}<option>{{ m }}</option>{% endfor %}</select></div>
+        </div>
+        <input type="hidden" name="fecha" value="{{ hoy }}">
+        <button class="btn block">Registrar abono</button>
+      </form>
+      {% endif %}
+    {% endif %}
+
+    {% if puede('admin') %}
+    <h3 style="margin:18px 0 6px">Rentabilidad</h3>
+    <div class="sum-line"><span>Cobrado (sin IVA)</span><b>{{ o.total|cop }}</b></div>
+    <div class="sum-line"><span>− Materiales (al costo)</span><b>{{ o.costo_materiales|cop }}</b></div>
+    <div class="sum-line"><span>− Pago al técnico{% if o.nomina_id %} <span class="badge ok">pagado</span>{% endif %}</span><b>{{ o.pago_tecnico|cop }}</b></div>
+    {% if o.otros_costos %}<div class="sum-line"><span>− Transporte / otros</span><b>{{ o.otros_costos|cop }}</b></div>{% endif %}
+    <div class="sum-total"><span>Ganancia</span><span class="{{ 'pos' if o.ganancia >= 0 else 'neg' }}">{{ o.ganancia|cop }}</span></div>
+    {% endif %}
+
+    {% if o.garantia_dias %}
+    <h3 style="margin:18px 0 6px">Garantía</h3>
+    {% if o.garantia_hasta %}<div>{{ o.garantia_dias }} días · {% if o.garantia_vigente %}<span class="badge warn">vigente hasta {{ o.garantia_hasta|fecha }}</span>{% else %}<span class="badge gray">venció el {{ o.garantia_hasta|fecha }}</span>{% endif %}</div>
+    {% else %}<div class="muted">{{ o.garantia_dias }} días desde que se termine.</div>{% endif %}
+    {% if o.garantia_vigente and puede('admin', 'asesor') %}<a class="btn sec sm" style="margin-top:8px" href="{{ url_for('orden_nueva', garantia_de=o.id) }}">Registrar visita en garantía</a>{% endif %}
+    {% endif %}
+    {% if garantias %}
+    <div style="margin-top:10px;font-size:.88rem">Visitas en garantía:
+      {% for gv in garantias %}<a href="{{ url_for('orden_detalle', id=gv.id) }}">{{ num_orden(gv) }}</a> ({{ (gv.fecha_fin or gv.fecha)|fecha }}){{ ', ' if not loop.last }}{% endfor %}</div>
+    {% endif %}
+
+    {% if not o.anulada %}
+    <h3 style="margin:18px 0 8px">Estado</h3>
+    <div class="actions">
+      {% if o.estado == 'programada' %}
+      <form method="post" action="{{ url_for('orden_estado', id=o.id) }}"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="estado" value="en_proceso"><button class="btn sec sm">Iniciar visita</button></form>
+      {% endif %}
+      {% if abierta %}<a class="btn sm" href="#terminar">Terminar</a>{% endif %}
+      {% if puede('admin', 'asesor') and o.estado != 'cancelada' and o.estado != 'terminada' %}
+      <form method="post" action="{{ url_for('orden_estado', id=o.id) }}" onsubmit="return confirm('¿Cancelar esta visita?')"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="estado" value="cancelada"><button class="btn sec sm">Cancelar visita</button></form>
+      {% endif %}
+      {% if puede('admin', 'asesor') and o.estado in ('terminada', 'cancelada') and not o.nomina_id %}
+      <form method="post" action="{{ url_for('orden_estado', id=o.id) }}" onsubmit="return confirm('¿Reabrir la orden? Los materiales vuelven a la bodega hasta que se termine de nuevo.')"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="estado" value="programada"><button class="btn sec sm">Reabrir</button></form>
+      {% endif %}
+      {% if puede('admin') %}
+      <form method="post" action="{{ url_for('orden_anular', id=o.id) }}" onsubmit="return confirm('¿Anular la orden {{ num_orden(o) }}? Los materiales vuelven a la bodega y deja de contar en los reportes.')"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><button class="btn danger sm">Anular</button></form>
+      {% endif %}
+    </div>
+    {% endif %}
+    <p class="muted" style="font-size:.8rem;margin-top:14px">Creada {{ o.creado|fecha(true) }}{% if o.usuario %} por {{ o.usuario.nombre }}{% endif %}.</p>
+  </div>
+</div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+{% if abierta %}
+<script>
+  const INS = {{ insumos|tojson }};
+  const fila = () => `<tr><td><select class="input" name="mat_insumo[]"><option value="">— Material —</option>${INS.map(i => `<option value="${i.id}">${esc(i.nombre)} (${NUM(i.stock)} ${esc(i.unidad)})</option>`).join('')}</select></td>
+    <td style="width:110px"><input class="input" name="mat_cant[]" inputmode="decimal" placeholder="Cant."></td><td style="width:40px"><button type="button" class="btn-icon" onclick="this.closest('tr').remove()">✕</button></td></tr>`;
+  document.getElementById('addMatT').addEventListener('click', () => document.getElementById('matsT').insertAdjacentHTML('beforeend', fila()));
+</script>
+{% endif %}
+{% endblock %}
