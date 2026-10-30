@@ -107,9 +107,9 @@
   new Chart(document.getElementById('ch'), {
     type: 'bar',
     data: { labels: S.labels, datasets: [
-      { label: 'Ingresos', data: S.ingresos, backgroundColor: '#29b6f6', borderRadius: 4, order: 2 },
-      { label: 'Costos directos', data: S.costos, backgroundColor: '#c9dcf2', borderRadius: 4, order: 3 },
-      { label: 'Ganancia neta', data: S.neta, type: 'line', borderColor: '#0d47a1', backgroundColor: '#0d47a1', tension: .3, pointRadius: 3, order: 1 }
+      { label: 'Ingresos', data: S.ingresos, backgroundColor: '#2f7fd6', borderRadius: 4, order: 2 },
+      { label: 'Costos directos', data: S.costos, backgroundColor: '#cdd9ea', borderRadius: 4, order: 3 },
+      { label: 'Ganancia neta', data: S.neta, type: 'line', borderColor: '#f26a1b', backgroundColor: '#f26a1b', tension: .3, pointRadius: 3, order: 1 }
     ]},
     options: { maintainAspectRatio: false, interaction: { mode: 'index', intersect: false },
       plugins: { legend: { position: 'bottom', labels: { boxWidth: 12 } },

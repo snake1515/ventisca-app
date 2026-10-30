@@ -24,11 +24,12 @@ HAY_LOGO = os.path.exists(LOGO)
 pdfmetrics.registerFont(TTFont("DV", F_REG))
 pdfmetrics.registerFont(TTFont("DVB", F_BOLD))
 
-TINTA = "#0f2340"
-GRIS = "#5b6b80"
-LINEA = "#d6e2ee"
-ACENTO = "#0D47A1"
-ACENTO_SOFT = "#e6f1fc"
+TINTA = "#0d1b3a"
+GRIS = "#56647c"
+LINEA = "#dde5f0"
+ACENTO = "#1450B4"
+NARANJA = "#F26A1B"
+ACENTO_SOFT = "#E7EFFB"
 ROJO = "#c53030"
 NOTA_LEGAL = "Documento soporte del servicio. No es factura electrónica de venta."
 
@@ -195,11 +196,13 @@ def _encabezado_pdf(c, d, titulo, x0, x1, y):
     """Logo, datos del negocio, título, número y fecha. Devuelve la y más baja usada."""
     W, H = letter
     c.setFillColor(HexColor(ACENTO))
-    c.rect(0, H - 8 * mm, W, 8 * mm, stroke=0, fill=1)
+    c.rect(0, H - 8 * mm, W * .62, 8 * mm, stroke=0, fill=1)
+    c.setFillColor(HexColor(NARANJA))
+    c.rect(W * .62, H - 8 * mm, W * .38, 8 * mm, stroke=0, fill=1)
     xt = x0
     lg = d.get("logo")
     if lg:
-        lw = 28 * mm
+        lw = 40 * mm
         c.drawImage(ImageReader(lg), x0, y - 22 * mm, width=lw, height=lw * lg.height / lg.width, mask=None)
         xt = x0 + lw + 5 * mm
     c.setFillColor(HexColor(TINTA))
@@ -418,7 +421,7 @@ def jpg(d):
             out.append(actual)
         return out
 
-    LOGO_W = 300
+    LOGO_W = 520
     lg = d.get("logo")
     info = [(k, v) for k, v in d["info"] if v]
     alto_items = sum(44 * len(cortar(it["nombre"], F["itemb"], W - 2 * M - 280)) + 40 + (38 if it.get("detalle") else 0) + 34
@@ -428,7 +431,8 @@ def jpg(d):
          + alto_items + 50 * len(d["totales"]) + 200 + (110 if d["saldo"] is not None else 0) + alto_bloques + 180)
     img = Image.new("RGB", (W, H), "white")
     g = ImageDraw.Draw(img)
-    g.rectangle([0, 0, W, 18], fill=ACENTO)
+    g.rectangle([0, 0, int(W * .62), 18], fill=ACENTO)
+    g.rectangle([int(W * .62), 0, W, 18], fill=NARANJA)
     y = 64
     if lg:
         lg = lg.resize((LOGO_W, LOGO_W * lg.height // lg.width), Image.LANCZOS)

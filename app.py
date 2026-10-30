@@ -222,12 +222,21 @@ def negocio_cache(refrescar=False):
     import time
     eid = empresa_id_actual()
     if eid is None:
-        return dict(nombre=NOMBRE_APP, prefijo="OS", logo_v=0)
+        # Pantallas sin sesión (login): la app atiende a una sola empresa, se usa su nombre
+        try:
+            emp = Empresa.query.order_by(Empresa.id).first()
+        except Exception:
+            db.session.rollback()
+            emp = None
+        if emp is None:
+            return dict(nombre=NOMBRE_APP, prefijo="OS", logo_v=0)
+        eid = emp.id
     c = _cache_neg.get(eid)
     if refrescar or c is None or time.time() > c[1]:
         val = dict(nombre=NOMBRE_APP, prefijo="OS", logo_v=0)
         try:
-            neg = DatosNegocio.query.first()
+            neg = (DatosNegocio.query.filter(DatosNegocio.empresa_id == eid)
+                   .execution_options(todas_empresas=True).first())
             if neg:
                 val = dict(nombre=neg.nombre or NOMBRE_APP, prefijo=(neg.prefijo or "OS").upper(),
                            logo_v=neg.logo_v if neg.logo else 0)
@@ -2118,8 +2127,9 @@ def salud():
 @app.route("/manifest.webmanifest")
 def manifest():
     """Permite instalar la app en el celular (ícono en la pantalla de inicio)."""
-    return jsonify(name=NOMBRE_APP, short_name=NOMBRE_APP, start_url="/", display="standalone",
-                   background_color="#f3f7fb", theme_color="#0B1F3A",
+    nombre = negocio_cache()["nombre"]
+    return jsonify(name=nombre, short_name=nombre[:12], start_url="/", display="standalone",
+                   background_color="#f3f6fb", theme_color="#0A1A3F",
                    icons=[dict(src=url_for("static", filename="brand/icon-192.png"), sizes="192x192", type="image/png"),
                           dict(src=url_for("static", filename="brand/icon-512.png"), sizes="512x512", type="image/png")])
 

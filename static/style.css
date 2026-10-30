@@ -1,15 +1,18 @@
 :root {
-  --bg: #f3f7fb;
+  --bg: #f3f6fb;
   --panel: #ffffff;
-  --ink: #0f2340;
-  --muted: #5b6b80;
-  --line: #dfe8f1;
-  --nav: #0b1f3a;
-  --nav-ink: #b9cbe0;
-  --accent: #0d47a1;
+  --ink: #0d1b3a;
+  --muted: #56647c;
+  --line: #dde5f0;
+  --nav: #0a1a3f;
+  --nav-ink: #b7c6e0;
+  --accent: #1450b4;
   --accent-ink: #ffffff;
-  --accent-soft: #e6f1fc;
-  --cyan: #29b6f6;
+  --accent-soft: #e7effb;
+  --orange: #c2410c;
+  --orange-bright: #f26a1b;
+  --orange-soft: #fff0e6;
+  --cyan: #2f9be8;
   --berry: #00838f;
   --berry-soft: #e0f4f5;
   --ok: #138a5a;
@@ -19,7 +22,7 @@
   --err: #c53030;
   --err-soft: #fdeaea;
   --radius: 12px;
-  --shadow: 0 1px 2px rgba(11, 31, 58, .06), 0 4px 14px rgba(11, 31, 58, .05);
+  --shadow: 0 1px 2px rgba(10, 26, 63, .06), 0 4px 14px rgba(10, 26, 63, .05);
 }
 
 * { box-sizing: border-box; }
@@ -61,7 +64,7 @@ small, .muted { color: var(--muted); }
   display: flex; align-items: center; gap: 10px;
 }
 .nav a:hover { background: rgba(255, 255, 255, .06); text-decoration: none; color: #fff; }
-.nav a.on { background: rgba(41, 182, 246, .22); color: #fff; }
+.nav a.on { background: rgba(242, 106, 27, .2); color: #fff; box-shadow: inset 3px 0 0 var(--orange-bright); }
 .nav .ico { width: 18px; text-align: center; opacity: .85; }
 .nav-sep { height: 1px; background: rgba(255, 255, 255, .08); margin: 10px 6px; }
 .sidebar .me { margin-top: auto; padding: 12px; font-size: .85rem; border-top: 1px solid rgba(255, 255, 255, .08); }
@@ -137,7 +140,7 @@ label { display: block; font-weight: 700; font-size: .85rem; margin-bottom: 5px;
 /* ---------- buttons ---------- */
 .btn {
   display: inline-flex; align-items: center; justify-content: center; gap: 6px; padding: 9px 16px; border-radius: 9px;
-  border: 1px solid transparent; font: inherit; font-weight: 700; cursor: pointer; background: var(--accent);
+  border: 1px solid transparent; font: inherit; font-weight: 700; cursor: pointer; background: var(--orange);
   color: var(--accent-ink); text-decoration: none !important; white-space: nowrap;
 }
 .btn:hover { filter: brightness(.95); }
@@ -180,7 +183,7 @@ label { display: block; font-weight: 700; font-size: .85rem; margin-bottom: 5px;
 
 /* login */
 .login-wrap { min-height: 100vh; display: grid; place-items: center; padding: 20px;
-  background: radial-gradient(1200px 500px at 10% -10%, #d3e6fb 0%, transparent 60%), radial-gradient(900px 500px at 110% 110%, #d9f1fb 0%, transparent 55%), var(--bg); }
+  background: radial-gradient(1200px 500px at 10% -10%, #d6e4fa 0%, transparent 60%), radial-gradient(900px 500px at 110% 110%, #ffe6d6 0%, transparent 55%), var(--bg); }
 .login-card { width: 100%; max-width: 380px; }
 .login-card .brand { color: var(--ink); justify-content: center; padding-bottom: 18px; }
 .login-card .brand small { color: var(--muted); }
@@ -290,3 +293,7 @@ label { display: block; font-weight: 700; font-size: .85rem; margin-bottom: 5px;
 }
 
 td:first-child a, .nw { white-space: nowrap; }
+
+/* WillAires: logo del menú en cuadro blanco */
+.brand-logo { background: #fff; padding: 2px; width: 44px; height: 44px; object-fit: contain; }
+.kpi.hl { background: linear-gradient(135deg, #0a1a3f 0%, #12306f 100%); }

@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="theme-color" content="#0b1f3a">
+  <meta name="theme-color" content="#0a1a3f">
   <title>{% block title %}{{ NOMBRE_NEGOCIO }}{% endblock %} · {{ NOMBRE_NEGOCIO }}</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@700;800&family=Nunito+Sans:wght@400;600;700;800&display=swap" rel="stylesheet">
@@ -14,7 +14,7 @@
   <style>
     .sidebar { overflow-y: auto; }
     .nav a { padding: 7px 12px; }
-    #carga { position: fixed; top: 0; left: 0; height: 3px; width: 0; background: var(--cyan); z-index: 100; transition: width .3s ease; box-shadow: 0 0 8px var(--cyan); }
+    #carga { position: fixed; top: 0; left: 0; height: 3px; width: 0; background: var(--orange-bright); z-index: 100; transition: width .3s ease; box-shadow: 0 0 8px var(--orange-bright); }
     #carga.on { width: 70%; transition: width 4s cubic-bezier(.1,.7,.2,1); }
     .overlay { display: none; }
     .nav-titulo { font-size: .7rem; text-transform: uppercase; letter-spacing: .08em; color: #6f88a6; padding: 4px 12px 2px; font-weight: 800; }
@@ -35,7 +35,7 @@
 </header>
 <div class="layout">
   <aside class="sidebar">
-    <div class="brand"><img class="brand-logo" src="{{ url_for('logo', v=LOGO_V) }}" alt=""><div><b>{{ NOMBRE_NEGOCIO }}</b><small>Mantenimiento de aires</small></div></div>
+    <div class="brand"><img class="brand-logo" src="{{ url_for('logo', v=LOGO_V) }}" alt=""><div><b>{{ NOMBRE_NEGOCIO }}</b><small>Reparación de aires</small></div></div>
     <nav class="nav">
       {% if EMPRESA %}
       {% if puede('admin') %}
