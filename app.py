@@ -2369,10 +2369,13 @@ def salud():
 def manifest():
     """Permite instalar la app en el celular (ícono en la pantalla de inicio)."""
     nombre = negocio_cache()["nombre"]
-    return jsonify(name=nombre, short_name=nombre[:12], start_url="/", display="standalone",
-                   background_color="#f3f6fb", theme_color="#0A1A3F",
-                   icons=[dict(src=url_for("static", filename="brand/icon-192.png"), sizes="192x192", type="image/png"),
-                          dict(src=url_for("static", filename="brand/icon-512.png"), sizes="512x512", type="image/png")])
+    ico = lambda f, tam, uso: dict(src=url_for("static", filename="brand/" + f), sizes=tam, type="image/png", purpose=uso)
+    r = jsonify(id="/", name=nombre, short_name=nombre[:12], start_url="/", scope="/", display="standalone",
+                background_color="#ffffff", theme_color="#0A1A3F",
+                icons=[ico("wa-icon-192.png", "192x192", "any"), ico("wa-icon-512.png", "512x512", "any"),
+                       ico("wa-maskable-192.png", "192x192", "maskable"), ico("wa-maskable-512.png", "512x512", "maskable")])
+    r.headers["Cache-Control"] = "no-cache"
+    return r
 
 
 @app.route("/logo.jpg")
