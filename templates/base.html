@@ -48,6 +48,7 @@
       <a href="{{ url_for('orden_nueva') }}" class="{{ 'on' if ep == 'orden_nueva' }}"><span class="ico">＋</span>Nueva orden</a>
       <a href="{{ url_for('ordenes') }}" class="{{ 'on' if ep in ('ordenes', 'orden_detalle', 'orden_editar') }}"><span class="ico">✔</span>Órdenes de servicio</a>
       <a href="{{ url_for('cotizaciones') }}" class="{{ 'on' if ep.startswith('cotizacion') }}"><span class="ico">✎</span>Cotizaciones</a>
+      <a href="{{ url_for('cuentas_cobro') }}" class="{{ 'on' if ep.startswith('cuenta') }}"><span class="ico">▣</span>Cuentas de cobro</a>
       <a href="{{ url_for('ventas_equipos') }}" class="{{ 'on' if 'venta_equipo' in ep or ep == 'ventas_equipos' }}"><span class="ico">⇄</span>Venta de equipos</a>
       <a href="{{ url_for('cartera') }}" class="{{ 'on' if ep == 'cartera' }}"><span class="ico">⏳</span>Cartera (crédito)</a>
       <a href="{{ url_for('clientes') }}" class="{{ 'on' if ep.startswith('cliente') or ep.startswith('equipo') }}"><span class="ico">♟</span>Clientes y equipos</a>

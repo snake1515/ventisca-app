@@ -11,6 +11,7 @@
   <div class="actions">
     {% if wa_cli %}<a class="btn wa" href="{{ wa_cli }}" target="_blank" rel="noopener">WhatsApp al cliente</a>{% endif %}
     <a class="btn sec" href="{{ url_for('orden_documento', id=o.id, fmt='pdf') }}" target="_blank">PDF</a>
+    {% if o.terminada and puede('admin', 'asesor') and o.total_factura > 0.5 %}<a class="btn sec" href="{{ url_for('cuenta_cobro_form', orden=o.id) }}">Cuenta de cobro</a>{% endif %}
     <a class="btn sec" href="{{ url_for('orden_documento', id=o.id, fmt='jpg') }}" target="_blank" title="Imagen para enviar por WhatsApp">Imagen</a>
     {% if puede('admin', 'asesor') and not o.anulada %}<a class="btn sec" href="{{ url_for('orden_editar', id=o.id) }}">Editar</a>{% endif %}
   </div>

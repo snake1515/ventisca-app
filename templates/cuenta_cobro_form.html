@@ -1,0 +1,97 @@
+{% extends "base.html" %}
+{% block title %}{{ 'Editar' if cc else 'Nueva' }} cuenta de cobro{% endblock %}
+{% block content %}
+<div class="page-head"><div><h1>{{ ('Editar cuenta de cobro N°' ~ cc.codigo) if cc else 'Nueva cuenta de cobro' }}</h1>
+  <p>Elige el cliente y marca los servicios que le vas a cobrar. El valor y el concepto se llenan solos; puedes cambiarlos.</p></div></div>
+{% if not neg.representante or not neg.nit %}
+<div class="gar-box">Para que la cuenta salga completa, llena en <a href="{{ url_for('negocio') }}">Datos del negocio</a> el <b>nombre del titular</b> (quien firma), el <b>NIT</b>, la dirección y el celular.</div>
+{% endif %}
+<form method="post" id="f" autocomplete="off">
+<input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+<div class="grid g-main">
+<div>
+  <div class="card">
+    <h2 style="margin-bottom:12px">A quién se le cobra</h2>
+    <div class="field"><label>Cliente</label>
+      <select class="input" name="cliente_id" id="cliente">
+        <option value="">— Elige el cliente —</option>
+        {% for c in clientes %}<option value="{{ c.id }}" {{ 'selected' if pre.cliente_id == c.id }}>{{ c.nombre }}</option>{% endfor %}
+      </select></div>
+    <div class="form-row">
+      <div class="field"><label>Nombre como sale en la cuenta</label><input class="input" name="cliente_nombre" id="nombre" value="{{ pre.nombre }}" placeholder="Ej: Parroquia Cristo Resucitado de Cúcuta" maxlength="160"></div>
+      <div class="field"><label>NIT o cédula</label><input class="input" name="cliente_nit" id="nit" value="{{ pre.nit }}" maxlength="40"></div>
+    </div>
+    <div class="field"><label>Dirección</label><input class="input" name="cliente_direccion" id="dir" value="{{ pre.direccion }}" maxlength="200" placeholder="Ej: Av. 18E N°16AN-07 Urbanización Niza – Cúcuta (N de S)"></div>
+    <label class="check"><input type="checkbox" name="guardar_datos" value="1" checked> Guardar el NIT en la ficha del cliente si no lo tiene</label>
+  </div>
+
+  <div class="card">
+    <div class="card-head"><h2>Servicios que se cobran</h2><span class="muted" style="font-size:.85rem" id="oHint"></span></div>
+    <div class="eq-pick" id="ordenes"><div class="muted">Elige el cliente para ver sus órdenes terminadas.</div></div>
+    <p class="hint" style="margin-top:10px">Puedes juntar varias órdenes del mismo cliente (por ejemplo, todo el mes). Si no marcas ninguna, la cuenta queda solo como documento con el valor que escribas.</p>
+  </div>
+</div>
+
+<div>
+  <div class="card summary">
+    <h2 style="margin-bottom:12px">Cuenta de cobro</h2>
+    <div class="form-row c4">
+      <div class="field"><label>N.º</label><input class="input" name="numero" type="number" min="1" value="{{ pre.numero }}"><div class="hint">Se reinicia cada año</div></div>
+      <div class="field"><label>Fecha</label><input class="input" type="date" name="fecha" value="{{ pre.fecha }}"></div>
+    </div>
+    <div class="field"><label>Valor a cobrar</label><input class="input" name="valor" id="valor" inputmode="numeric" value="{{ pre.valor }}" required>
+      <div class="hint" id="letras"></div></div>
+    <div class="field"><label>Por concepto de</label><textarea class="input" name="concepto" id="concepto" rows="2" required>{{ pre.concepto }}</textarea></div>
+    <div class="field"><label>Detalle adicional (opcional)</label><textarea class="input" name="detalle" rows="2" placeholder="Ej: Mantenimiento de 4 equipos, mes de marzo.">{{ pre.detalle }}</textarea></div>
+    <button class="btn block">Guardar cuenta de cobro</button>
+    {% if cc %}<a class="btn sec block" style="margin-top:8px" href="{{ url_for('cuenta_cobro_detalle', id=cc.id) }}">Cancelar</a>{% endif %}
+  </div>
+</div>
+</div>
+</form>
+{% endblock %}
+{% block scripts %}
+<script>
+  const CLIS = {{ clientes|tojson }}, ORDS = {{ ordenes|tojson }}, CONC = {{ conceptos|tojson }}, PRE = {{ pre|tojson }};
+  const $ = id => document.getElementById(id);
+  let valorManual = !!PRE.valor, conceptoManual = !!PRE.concepto;
+  const U = ['', 'un', 'dos', 'tres', 'cuatro', 'cinco', 'seis', 'siete', 'ocho', 'nueve', 'diez', 'once', 'doce', 'trece', 'catorce', 'quince',
+    'dieciséis', 'diecisiete', 'dieciocho', 'diecinueve', 'veinte', 'veintiún', 'veintidós', 'veintitrés', 'veinticuatro', 'veinticinco',
+    'veintiséis', 'veintisiete', 'veintiocho', 'veintinueve'];
+  const D = ['', '', '', 'treinta', 'cuarenta', 'cincuenta', 'sesenta', 'setenta', 'ochenta', 'noventa'];
+  const C = ['', 'ciento', 'doscientos', 'trescientos', 'cuatrocientos', 'quinientos', 'seiscientos', 'setecientos', 'ochocientos', 'novecientos'];
+  const m1000 = n => { if (!n) return ''; if (n === 100) return 'cien'; const c = Math.floor(n / 100), r = n % 100; let t = c ? C[c] : '';
+    if (r) t += (t ? ' ' : '') + (r < 30 ? U[r] : D[Math.floor(r / 10)] + (r % 10 ? ' y ' + U[r % 10] : '')); return t; };
+  const letras = v => { v = Math.round(v); if (!v) return ''; const mi = Math.floor(v / 1e6), k = Math.floor(v % 1e6 / 1000), u = v % 1000; const p = [];
+    if (mi) p.push(mi === 1 ? 'un millón' : m1000(mi) + ' millones'); if (k) p.push(k === 1 ? 'mil' : m1000(k) + ' mil'); if (u) p.push(m1000(u).replace(/ un$/, ' uno').replace(/^un$/, 'uno'));
+    let t = p.join(' ') + (v % 1e6 === 0 ? ' de' : ''); return t[0].toUpperCase() + t.slice(1) + ' pesos M/L'; };
+
+  function pintar(marcar) {
+    const lista = ORDS[$('cliente').value] || [];
+    $('oHint').textContent = lista.length ? 'Marca las que se cobran' : '';
+    if (!$('cliente').value) { $('ordenes').innerHTML = '<div class="muted">Elige el cliente para ver sus órdenes terminadas.</div>'; return; }
+    if (!lista.length) { $('ordenes').innerHTML = '<div class="muted">Este cliente no tiene órdenes terminadas con cobro.</div>'; return; }
+    $('ordenes').innerHTML = lista.map(o => `<label style="${o.usada ? 'opacity:.5' : ''}"><input type="checkbox" name="orden_id" value="${o.id}" ${marcar.includes(o.id) ? 'checked' : ''} ${o.usada && !marcar.includes(o.id) ? 'disabled' : ''}>
+      <span><b>${esc(o.num)}</b> · ${esc(o.fecha)} · ${esc(o.tipo_txt)}${o.equipos ? ' · <span class="muted">' + esc(o.equipos) + '</span>' : ''}</span>
+      ${o.usada ? '<span class="badge gray">Ya en otra cuenta</span>' : (o.credito && o.saldo > 0.5 ? `<span class="badge warn">Debe ${COP(o.saldo)}</span>` : '')}
+      <span class="badge info">${COP(o.total)}</span></label>`).join('');
+  }
+  function calcular() {
+    const lista = ORDS[$('cliente').value] || [];
+    const sel = [...document.querySelectorAll('[name=orden_id]:checked')].map(x => lista.find(o => o.id === +x.value)).filter(Boolean);
+    if (sel.length && !valorManual) $('valor').value = Math.round(sel.reduce((a, o) => a + (o.credito && o.saldo > 0.5 ? o.saldo : o.total), 0));
+    if (sel.length && !conceptoManual) { const tipos = [...new Set(sel.map(o => o.tipo))]; $('concepto').value = tipos.length === 1 ? CONC[tipos[0]] : 'Servicio técnico de aires acondicionados'; }
+    const v = val($('valor')); $('letras').textContent = v ? letras(v) + ' (' + COP(v) + ')' : '';
+  }
+  $('cliente').addEventListener('change', () => {
+    const c = CLIS.find(x => String(x.id) === $('cliente').value);
+    if (c) { $('nombre').value = c.nombre; $('nit').value = c.nit; $('dir').value = c.dir; }
+    valorManual = false; conceptoManual = false; pintar([]); calcular();
+  });
+  $('valor').addEventListener('input', () => { valorManual = true; calcular(); });
+  $('concepto').addEventListener('input', () => { conceptoManual = true; });
+  document.getElementById('ordenes').addEventListener('change', () => { valorManual = false; calcular(); });
+  if (PRE.cliente_id && !PRE.nombre) { const c = CLIS.find(x => x.id === PRE.cliente_id); if (c) { $('nombre').value = c.nombre; $('nit').value = c.nit; $('dir').value = c.dir; } }
+  pintar(PRE.ordenes || []); calcular();
+</script>
+{% endblock %}

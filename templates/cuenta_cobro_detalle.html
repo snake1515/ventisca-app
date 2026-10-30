@@ -1,0 +1,96 @@
+{% extends "base.html" %}
+{% block title %}Cuenta de cobro {{ cc.codigo }}{% endblock %}
+{% block content %}
+<div class="page-head">
+  <div><h1>Cuenta de cobro N°{{ cc.codigo }} <span class="badge {{ cc.estado_info[1] }}" style="vertical-align:middle">{{ cc.estado_info[0] }}</span></h1>
+    <p>{{ cc.cliente_nombre }} · {{ cc.fecha|fecha }}</p></div>
+  <div class="actions">
+    {% if wa %}<a class="btn wa" href="{{ wa }}" target="_blank" rel="noopener">WhatsApp al cliente</a>{% endif %}
+    <a class="btn sec" href="{{ url_for('cuenta_cobro_pdf', id=cc.id) }}" target="_blank">Ver PDF</a>
+    <a class="btn sec" href="{{ url_for('cuenta_cobro_pdf', id=cc.id, descargar=1) }}">Descargar</a>
+    {% if cc.estado == 'pendiente' %}<a class="btn sec" href="{{ url_for('cuenta_cobro_form', id=cc.id) }}">Editar</a>{% endif %}
+  </div>
+</div>
+{% if falta_datos %}<div class="gar-box">Falta el <b>nombre del titular</b> o el <b>NIT</b> de la empresa. Llénalos en <a href="{{ url_for('negocio') }}">Datos del negocio</a> para que salgan en la cuenta.</div>{% endif %}
+<div class="grid g-main">
+  <div>
+    <div class="card hoja-cc">
+      <div class="franja"><span></span><span></span></div>
+      <img src="{{ url_for('logo', v=LOGO_V) if neg.logo else url_for('static', filename='logo.jpg', v=STATIC_V) }}" alt="" class="logo-cc">
+      <p class="c b g">CUENTA DE COBRO N°{{ cc.codigo }}</p>
+      <p class="c">({{ fecha_larga }})</p>
+      <p class="c b esp">{{ cc.cliente_nombre|upper }}{{ '' if cc.cliente_nombre.endswith('.') else '.' }}</p>
+      {% if cc.cliente_direccion %}<p class="c">{{ cc.cliente_direccion }}</p>{% endif %}
+      {% if cc.cliente_nit %}<p class="c">NIT: {{ cc.cliente_nit }}</p>{% endif %}
+      <p class="c esp">DEBE A:</p>
+      {% if neg.representante %}<p class="c">{{ neg.representante }}</p>{% endif %}
+      <p class="c b">({{ neg.nombre|upper }})</p>
+      {% if neg.nit %}<p class="c b">NIT: {{ neg.nit }}</p>{% endif %}
+      <p class="esp"><b>La Suma de:</b> <i>{{ letras }}.</i></p>
+      <p><b>Por Concepto de:</b> <i>{{ cc.concepto }}{{ '' if cc.concepto.endswith('.') else '.' }}</i></p>
+      {% if cc.detalle %}<p class="texto">{{ cc.detalle }}</p>{% endif %}
+      <p class="esp">Cordialmente,</p>
+      {% if neg.firma %}<img src="{{ url_for('firma_img') }}" alt="Firma" class="firma-cc">{% else %}<div style="height:34px"></div>{% endif %}
+      <p>{{ neg.representante or neg.nombre }}</p>
+      {% if neg.direccion %}<p>Dirección: {{ neg.direccion }}{% if neg.ciudad %} – {{ neg.ciudad }}{% endif %}</p>{% endif %}
+      {% if neg.telefono %}<p>Celular: {{ neg.telefono }}</p>{% endif %}
+      {% if cc.estado == 'pagada' %}<div class="sello">PAGADA<small>{{ cc.fecha_pago|fecha }}</small></div>{% endif %}
+    </div>
+    <style>
+      .hoja-cc { position: relative; padding: 46px 52px 40px; font-family: "Times New Roman", Times, serif; font-size: 16px; color: #111; max-width: 720px; overflow: hidden; }
+      .hoja-cc p { margin: 0 0 6px; }
+      .hoja-cc .c { text-align: center; } .hoja-cc .b { font-weight: 700; } .hoja-cc .g { font-size: 18px; }
+      .hoja-cc .esp { margin-top: 26px; }
+      .hoja-cc .franja { position: absolute; left: 0; right: 0; top: 0; height: 8px; display: flex; }
+      .hoja-cc .franja span:first-child { flex: 62; background: var(--accent); } .hoja-cc .franja span:last-child { flex: 38; background: var(--orange-bright); }
+      .logo-cc { display: block; margin: 0 auto 18px; max-width: 220px; max-height: 130px; object-fit: contain; }
+      .firma-cc { display: block; max-height: 70px; max-width: 200px; margin: 6px 0 2px; }
+      .sello { position: absolute; right: 50px; bottom: 60px; transform: rotate(-12deg); border: 3px solid var(--ok); color: var(--ok); border-radius: 10px; padding: 6px 18px; font: 800 22px/1.1 "Nunito", sans-serif; text-align: center; }
+      .sello small { display: block; font-size: 12px; font-weight: 700; }
+      @media (max-width: 820px) { .hoja-cc { padding: 34px 20px 28px; font-size: 14.5px; } .sello { right: 16px; bottom: 30px; } }
+    </style>
+    {% if cc.ordenes %}
+    <div class="card">
+      <h2 style="margin-bottom:8px">Órdenes incluidas</h2>
+      <div class="table-wrap"><table>
+        <thead><tr><th>Orden</th><th>Terminada</th><th>Servicio</th><th class="num">Total</th><th>Pago</th></tr></thead>
+        <tbody>{% for o in cc.ordenes %}
+          <tr><td><a href="{{ url_for('orden_detalle', id=o.id) }}">{{ num_orden(o) }}</a></td><td>{{ o.fecha_fin|fecha }}</td><td>{{ o.tipo_txt }}</td>
+            <td class="num">{{ o.total_factura|cop }}</td><td><span class="badge {{ o.estado_pago[1] }}">{{ o.estado_pago[0] }}</span></td></tr>
+        {% endfor %}</tbody>
+      </table></div>
+    </div>
+    {% endif %}
+  </div>
+  <div>
+    <div class="card summary">
+      <div class="big-num">{{ cc.valor|cop }}</div>
+      <p class="muted" style="margin-top:4px">{{ letras }}</p>
+      <dl class="kv" style="margin:12px 0">
+        <dt>Concepto</dt><dd>{{ cc.concepto }}</dd>
+        {% if cc.cliente_nit %}<dt>NIT</dt><dd>{{ cc.cliente_nit }}</dd>{% endif %}
+        {% if cc.cliente %}<dt>Cliente</dt><dd><a href="{{ url_for('cliente_detalle', id=cc.cliente_id) }}">Ver ficha</a></dd>{% endif %}
+        {% if cc.estado == 'pagada' %}<dt>Pagada</dt><dd>{{ cc.fecha_pago|fecha }} · {{ cc.metodo_pago }}</dd>{% endif %}
+        <dt>Elaboró</dt><dd>{{ cc.usuario.nombre if cc.usuario else '—' }}</dd>
+      </dl>
+      {% if cc.estado == 'pendiente' %}
+      <form method="post" action="{{ url_for('cuenta_cobro_estado', id=cc.id) }}">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="accion" value="pagada">
+        <div class="form-row c4">
+          <div class="field"><label>Fecha de pago</label><input class="input" type="date" name="fecha" value="{{ hoy }}"></div>
+          <div class="field"><label>Medio</label><select class="input" name="metodo">{% for m in metodos %}<option {{ 'selected' if m == 'Transferencia' }}>{{ m }}</option>{% endfor %}</select></div>
+        </div>
+        <button class="btn block">✔ Marcar como pagada</button>
+        {% if cc.ordenes|selectattr('condicion', 'equalto', 'credito')|list %}<p class="hint">Las órdenes a crédito incluidas quedan pagadas en Cartera.</p>{% endif %}
+      </form>
+      {% elif cc.estado == 'pagada' %}
+      <form method="post" action="{{ url_for('cuenta_cobro_estado', id=cc.id) }}"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="accion" value="pendiente"><button class="btn sec sm">Volver a pendiente</button></form>
+      {% endif %}
+      {% if puede('admin') and cc.estado != 'anulada' %}
+      <form method="post" action="{{ url_for('cuenta_cobro_estado', id=cc.id) }}" style="margin-top:10px" onsubmit="return confirm('¿Anular la cuenta de cobro N°{{ cc.codigo }}?')">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="accion" value="anular"><button class="btn danger sm">Anular</button></form>
+      {% endif %}
+    </div>
+  </div>
+</div>
+{% endblock %}

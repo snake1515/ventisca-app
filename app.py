@@ -24,7 +24,8 @@ from models import (CAPACIDADES, CATEGORIAS_GASTO, CATEGORIAS_INSUMO, COMISION_T
                     Abono, Activo, Cliente, CompraInsumo, Configuracion, Cotizacion, CotizacionLinea,
                     DatosNegocio, Empleado, Empresa, EmpresaMixin, Equipo, Gasto, Insumo, Orden, OrdenLinea,
                     OrdenMaterial, Usuario, VentaEquipo, ahora, db, empresa_id_actual,
-                    set_empresa, wa_link)
+                    set_empresa, wa_link, CuentaCobro, ESTADOS_CUENTA, cuenta_ordenes)
+from letras import pesos_en_letras
 from services import (ErrorNegocio, ajustar_stock, anular_compra, anular_orden, anular_venta_equipo,
                       calcular_venta_equipo, cambiar_estado, garantia_por_defecto, garantia_vigente,
                       guardar_orden, recalcular_equipo, recalcular_orden, registrar_abono, registrar_compra,
@@ -1385,6 +1386,203 @@ def cotizacion_eliminar(id):
     return redirect(url_for("cotizaciones"))
 
 
+# ---------------------------------------------------------- cuentas de cobro
+CONCEPTOS = {"preventivo": "Mantenimiento de aires acondicionados", "correctivo": "Reparación de aires acondicionados",
+             "instalacion": "Instalación de aires acondicionados", "desinstalacion": "Desinstalación de aires acondicionados",
+             "diagnostico": "Diagnóstico técnico de aires acondicionados", "gas": "Carga de gas de aires acondicionados",
+             "otro": "Servicio técnico de aires acondicionados"}
+
+
+def siguiente_numero(anio):
+    m = (db.session.query(func.max(CuentaCobro.numero)).filter(CuentaCobro.anio == anio).scalar()) or 0
+    return m + 1
+
+
+def ordenes_en_cuentas(excluir_id=None):
+    """ids de órdenes que ya están en una cuenta de cobro no anulada."""
+    q = (db.session.query(cuenta_ordenes.c.orden_id).join(CuentaCobro, CuentaCobro.id == cuenta_ordenes.c.cuenta_id)
+         .filter(CuentaCobro.estado != "anulada"))
+    if excluir_id:
+        q = q.filter(CuentaCobro.id != excluir_id)
+    return {x[0] for x in q.all()}
+
+
+def ordenes_cobrables_json(excluir_cuenta=None):
+    """Órdenes terminadas por cliente que se pueden incluir en una cuenta de cobro."""
+    usadas = ordenes_en_cuentas(excluir_cuenta)
+    out = defaultdict(list)
+    for o in (Orden.query.filter(Orden.estado == "terminada", Orden.anulada.is_(False), Orden.en_garantia.is_(False))
+              .order_by(Orden.fecha_fin.desc()).limit(2000).all()):
+        if o.total_factura <= 0.5:
+            continue
+        out[o.cliente_id].append(dict(id=o.id, num=num_orden(o), fecha=o.fecha_fin.strftime("%d/%m/%Y"), tipo=o.tipo,
+                                      tipo_txt=o.tipo_txt, total=o.total_factura, saldo=o.saldo,
+                                      credito=o.condicion == "credito", usada=o.id in usadas,
+                                      equipos=", ".join(e.corto for e in o.equipos[:3])))
+    return out
+
+
+@app.route("/cuentas-cobro")
+@rol_requerido("admin", "asesor")
+def cuentas_cobro():
+    hoy_d = ahora().date()
+    anio = request.args.get("anio", type=int) or hoy_d.year
+    estado = request.args.get("estado", "")
+    q = CuentaCobro.query.filter(CuentaCobro.anio == anio)
+    if estado in ESTADOS_CUENTA:
+        q = q.filter(CuentaCobro.estado == estado)
+    items = q.order_by(CuentaCobro.numero.desc()).all()
+    todas = CuentaCobro.query.filter(CuentaCobro.anio == anio).all()
+    anios = sorted({x[0] for x in db.session.query(CuentaCobro.anio).distinct().all()} | {hoy_d.year}, reverse=True)
+    return render_template("cuentas_cobro.html", items=items, anio=anio, anios=anios, estado=estado,
+                           estados=ESTADOS_CUENTA,
+                           pendiente=sum(x.valor for x in todas if x.estado == "pendiente"),
+                           n_pend=sum(1 for x in todas if x.estado == "pendiente"),
+                           pagado=sum(x.valor for x in todas if x.estado == "pagada"),
+                           n_pag=sum(1 for x in todas if x.estado == "pagada"))
+
+
+@app.route("/cuentas-cobro/nueva", methods=["GET", "POST"])
+@app.route("/cuentas-cobro/<int:id>/editar", methods=["GET", "POST"])
+@rol_requerido("admin", "asesor")
+def cuenta_cobro_form(id=None):
+    cc = db.session.get(CuentaCobro, id) if id else None
+    if id and not cc:
+        abort(404)
+    if cc and cc.estado != "pendiente":
+        flash("Solo se pueden editar las cuentas de cobro pendientes.", "error")
+        return redirect(url_for("cuenta_cobro_detalle", id=id))
+    neg = DatosNegocio.actual()
+    hoy_d = ahora().date()
+    if request.method == "POST":
+        f = request.form
+        errores = []
+        cli = db.session.get(Cliente, int(n(f.get("cliente_id")))) if n(f.get("cliente_id")) else None
+        nombre = (f.get("cliente_nombre") or "").strip() or (cli.nombre if cli else "")
+        fecha = _fecha(f.get("fecha"), hoy_d)
+        numero = int(n(f.get("numero")))
+        valor = n(f.get("valor"))
+        concepto = (f.get("concepto") or "").strip()
+        ids = [int(x) for x in f.getlist("orden_id") if x.isdigit()]
+        usadas = ordenes_en_cuentas(cc.id if cc else None)
+        ords = [o for o in (db.session.get(Orden, i) for i in ids) if o]
+        if not nombre:
+            errores.append("Elige el cliente o escribe a quién se le cobra.")
+        if numero < 1:
+            errores.append("El número de la cuenta de cobro debe ser mayor a 0.")
+        elif CuentaCobro.query.filter(CuentaCobro.anio == fecha.year, CuentaCobro.numero == numero,
+                                      CuentaCobro.id != (cc.id if cc else 0)).first():
+            errores.append(f"Ya existe la cuenta de cobro N°{numero:02d}/{fecha.year}. Usa otro número.")
+        if valor <= 0:
+            errores.append("Escribe el valor a cobrar.")
+        if not concepto:
+            errores.append("Escribe el concepto (por ejemplo: Mantenimiento de aires acondicionados).")
+        for o in ords:
+            if o.id in usadas:
+                errores.append(f"La orden {num_orden(o)} ya está en otra cuenta de cobro.")
+            if cli and o.cliente_id != cli.id:
+                errores.append(f"La orden {num_orden(o)} es de otro cliente.")
+        if errores:
+            for m in errores:
+                flash(m, "error")
+        else:
+            nuevo = cc is None
+            if nuevo:
+                cc = CuentaCobro(usuario_id=current_user.id, estado="pendiente")
+                db.session.add(cc)
+            cc.anio, cc.numero, cc.fecha = fecha.year, numero, fecha
+            cc.cliente_id = cli.id if cli else None
+            cc.cliente_nombre = nombre[:160]
+            cc.cliente_nit = (f.get("cliente_nit") or "").strip()[:40] or None
+            cc.cliente_direccion = (f.get("cliente_direccion") or "").strip()[:200] or None
+            cc.valor, cc.concepto = valor, concepto[:500]
+            cc.detalle = (f.get("detalle") or "").strip()[:2000] or None
+            cc.ordenes = ords
+            if cli and f.get("guardar_datos"):
+                if cc.cliente_nit and not cli.identificacion:
+                    cli.identificacion = cc.cliente_nit
+            db.session.commit()
+            flash(f"Cuenta de cobro N°{cc.codigo} guardada por {filtro_cop(cc.valor)}.", "ok")
+            return redirect(url_for("cuenta_cobro_detalle", id=cc.id))
+    pre = dict(fecha=hoy_d.isoformat(), numero=siguiente_numero(hoy_d.year), cliente_id=None, ordenes=[],
+               concepto="", valor="", detalle="", nit="", direccion="", nombre="")
+    if cc:
+        pre.update(fecha=cc.fecha.isoformat(), numero=cc.numero, cliente_id=cc.cliente_id, ordenes=[o.id for o in cc.ordenes],
+                   concepto=cc.concepto, valor=round(cc.valor), detalle=cc.detalle or "", nit=cc.cliente_nit or "",
+                   direccion=cc.cliente_direccion or "", nombre=cc.cliente_nombre)
+    else:
+        oid = request.args.get("orden", type=int)
+        o = db.session.get(Orden, oid) if oid else None
+        if o:
+            pre.update(cliente_id=o.cliente_id, ordenes=[o.id])
+        elif request.args.get("cliente", type=int):
+            pre.update(cliente_id=request.args.get("cliente", type=int))
+    clis = [dict(id=c.id, nombre=c.nombre, nit=c.identificacion or "",
+                 dir=" ".join(x for x in (c.direccion, c.barrio) if x) + (f" – {c.ciudad}" if c.ciudad else ""))
+            for c in Cliente.query.filter_by(activo=True).order_by(Cliente.nombre)]
+    return render_template("cuenta_cobro_form.html", cc=cc, pre=pre, clientes=clis, neg=neg,
+                           ordenes=ordenes_cobrables_json(cc.id if cc else None), conceptos=CONCEPTOS)
+
+
+@app.route("/cuentas-cobro/<int:id>")
+@rol_requerido("admin", "asesor")
+def cuenta_cobro_detalle(id):
+    cc = db.session.get(CuentaCobro, id) or abort(404)
+    wa = None
+    if cc.cliente and cc.cliente.whatsapp:
+        txt = (f"Hola {cc.cliente.nombre}, le saluda {negocio_cache()['nombre']}. Le enviamos la cuenta de cobro "
+               f"N°{cc.codigo} por {filtro_cop(cc.valor)}, por concepto de {cc.concepto.rstrip('.').lower()}. ¡Gracias!")
+        wa = f"{cc.cliente.whatsapp}?text={quote(txt)}"
+    neg = DatosNegocio.actual()
+    from letras import fecha_larga
+    return render_template("cuenta_cobro_detalle.html", cc=cc, wa=wa, metodos=METODOS_PAGO, letras=pesos_en_letras(cc.valor),
+                           falta_datos=not (neg.representante and neg.nit), neg=neg, fecha_larga=fecha_larga(cc.fecha))
+
+
+@app.route("/cuentas-cobro/<int:id>/documento.pdf")
+@rol_requerido("admin", "asesor")
+def cuenta_cobro_pdf(id):
+    cc = db.session.get(CuentaCobro, id) or abort(404)
+    modo = "attachment" if request.args.get("descargar") else "inline"
+    nombre = f"Cuenta de cobro {cc.numero:02d}-{cc.anio} {cc.cliente_nombre}".replace("/", "-")[:80]
+    return Response(comprobantes.cuenta_cobro_pdf(cc, DatosNegocio.actual(), num_orden), mimetype="application/pdf",
+                    headers={"Content-Disposition": f'{modo}; filename="{quote(nombre)}.pdf"'})
+
+
+@app.route("/cuentas-cobro/<int:id>/estado", methods=["POST"])
+@rol_requerido("admin", "asesor")
+def cuenta_cobro_estado(id):
+    cc = db.session.get(CuentaCobro, id) or abort(404)
+    accion = request.form.get("accion")
+    if accion == "pagada" and cc.estado == "pendiente":
+        fecha = _fecha(request.form.get("fecha"), ahora().date())
+        metodo = request.form.get("metodo") if request.form.get("metodo") in METODOS_PAGO else "Transferencia"
+        abonados = 0
+        try:
+            for o in cc.ordenes:
+                if o.condicion == "credito" and o.saldo > 0.5:
+                    registrar_abono(o, o.saldo, metodo, f"Pago cuenta de cobro N°{cc.codigo}",
+                                    datetime.combine(fecha, datetime.min.time()).replace(hour=12), current_user.id)
+                    abonados += 1
+            cc.estado, cc.fecha_pago, cc.metodo_pago = "pagada", fecha, metodo
+            db.session.commit()
+            flash(f"Cuenta de cobro N°{cc.codigo} marcada como pagada."
+                  + (f" Se abonó el saldo de {abonados} orden{'es' if abonados != 1 else ''} en cartera." if abonados else ""), "ok")
+        except ErrorNegocio as e:
+            db.session.rollback()
+            for m in e.errores:
+                flash(m, "error")
+    elif accion == "pendiente" and cc.estado == "pagada":
+        cc.estado, cc.fecha_pago, cc.metodo_pago = "pendiente", None, None
+        db.session.commit()
+        flash("La cuenta volvió a pendiente. Si se registraron abonos en las órdenes, anúlalos desde cada orden.", "info")
+    elif accion == "anular" and cc.estado != "anulada" and current_user.rol_efectivo == "admin":
+        cc.estado = "anulada"
+        db.session.commit()
+        flash(f"Cuenta de cobro N°{cc.codigo} anulada. Sus órdenes quedan libres para otra cuenta.", "ok")
+    return redirect(url_for("cuenta_cobro_detalle", id=id))
+
+
 # ------------------------------------------------------ compra-venta de equipos
 @app.route("/equipos-venta")
 @rol_requerido("admin", "asesor")
@@ -2068,10 +2266,20 @@ def negocio():
             neg.nombre = nombre[:120]
             for campo, largo in (("nit", 40), ("direccion", 160), ("ciudad", 80), ("telefono", 40),
                                  ("email", 120), ("regimen", 120), ("titulo_doc", 60), ("mensaje", 200),
-                                 ("condiciones_cot", 500)):
+                                 ("condiciones_cot", 500), ("representante", 120)):
                 setattr(neg, campo, (f.get(campo, "").strip()[:largo]) or None)
             neg.prefijo = "".join(ch for ch in f.get("prefijo", "OS").upper() if ch.isalnum())[:8] or "OS"
             neg.iva_pct = iva
+            firma = request.files.get("firma")
+            if f.get("quitar_firma"):
+                neg.firma = None
+            elif firma and firma.filename:
+                try:
+                    neg.firma = _procesar_firma(firma.read())
+                except Exception:
+                    flash("No se pudo leer la firma. Sube una imagen PNG o JPG.", "error")
+                    db.session.rollback()
+                    return redirect(url_for("negocio"))
             if f.get("quitar_logo"):
                 neg.logo, neg.logo_v = None, (neg.logo_v or 0) + 1
             elif archivo and archivo.filename:
@@ -2088,6 +2296,39 @@ def negocio():
             return redirect(url_for("negocio"))
     ultima = Orden.query.filter(Orden.estado == "terminada").order_by(Orden.id.desc()).first()
     return render_template("negocio.html", neg=neg, ultima=ultima)
+
+
+def _procesar_firma(data):
+    """Firma escaneada o foto: quita el fondo claro y la deja en PNG transparente de hasta 600 px."""
+    from PIL import Image
+    import io
+    Image.MAX_IMAGE_PIXELS = 40_000_000
+    im = Image.open(io.BytesIO(data))
+    if im.format not in ("JPEG", "PNG", "WEBP"):
+        raise ValueError("formato no permitido")
+    im = im.convert("RGBA")
+    im.thumbnail((600, 300))
+    px = im.load()
+    for y in range(im.height):
+        for x in range(im.width):
+            r, g, b, a = px[x, y]
+            if r > 200 and g > 200 and b > 200:
+                px[x, y] = (255, 255, 255, 0)
+    caja = im.getbbox()
+    if caja:
+        im = im.crop(caja)
+    buf = io.BytesIO()
+    im.save(buf, "PNG")
+    return buf.getvalue()
+
+
+@app.route("/negocio/firma.png")
+@rol_requerido("admin")
+def firma_img():
+    neg = DatosNegocio.actual()
+    if not neg.firma:
+        abort(404)
+    return Response(neg.firma, mimetype="image/png", headers={"Cache-Control": "no-store"})
 
 
 def _procesar_logo(data):
@@ -2321,7 +2562,8 @@ def migrar_columnas():
     from sqlalchemy import inspect, text
     insp = inspect(db.engine)
     tablas = set(insp.get_table_names())
-    nuevas = []  # (tabla, columna, tipo SQL)
+    blob = "BYTEA" if db.engine.dialect.name == "postgresql" else "BLOB"
+    nuevas = [("vt_negocio", "representante", "VARCHAR(120)"), ("vt_negocio", "firma", blob)]
     mapeadas = [m.class_ for m in db.Model.registry.mappers if issubclass(m.class_, EmpresaMixin)]
     nuevas += [(m.__tablename__, "empresa_id", "INTEGER") for m in mapeadas]
     for tabla, col, tipo in nuevas:

@@ -514,3 +514,156 @@ def jpg(d):
     buf = io.BytesIO()
     img.save(buf, "JPEG", quality=88)
     return buf.getvalue()
+
+
+# ------------------------------------------------------------ Cuenta de cobro
+def cuenta_cobro_pdf(cc, negocio, num_orden=None):
+    """Cuenta de cobro con el formato tradicional (centrado, letra Times) y el logo de la empresa."""
+    from letras import fecha_larga, pesos_en_letras
+    buf = io.BytesIO()
+    c = canvas.Canvas(buf, pagesize=letter)
+    c.setTitle(f"Cuenta de cobro N°{cc.codigo}")
+    W, H = letter
+    x0, x1 = 25 * mm, W - 25 * mm
+    cx = W / 2
+    c.setFillColor(HexColor(ACENTO))
+    c.rect(0, H - 6 * mm, W * .62, 6 * mm, stroke=0, fill=1)
+    c.setFillColor(HexColor(NARANJA))
+    c.rect(W * .62, H - 6 * mm, W * .38, 6 * mm, stroke=0, fill=1)
+    y = H - 14 * mm
+    lg = _logo(negocio)
+    if lg:
+        lw = 52 * mm
+        lh = lw * lg.height / lg.width
+        if lh > 34 * mm:
+            lh = 34 * mm
+            lw = lh * lg.width / lg.height
+        c.drawImage(ImageReader(lg), cx - lw / 2, y - lh, width=lw, height=lh, mask=None)
+        y -= lh + 9 * mm
+    else:
+        y -= 8 * mm
+
+    def centro(txt, fuente="Times-Roman", tam=12, sep=6.2 * mm, color=TINTA):
+        nonlocal y
+        c.setFont(fuente, tam)
+        c.setFillColor(HexColor(color))
+        c.drawCentredString(cx, y, txt)
+        y -= sep
+
+    centro(f"CUENTA DE COBRO N°{cc.codigo}", "Times-Bold", 14, 7.5 * mm)
+    centro(f"({fecha_larga(cc.fecha)})", sep=13 * mm)
+    nombre = (cc.cliente_nombre or "").upper()
+    centro(nombre if nombre.endswith(".") else nombre + ".", "Times-Bold", 12.5, 7 * mm)
+    if cc.cliente_direccion:
+        centro(cc.cliente_direccion[:95])
+    if cc.cliente_nit:
+        centro(f"NIT: {cc.cliente_nit}")
+    y -= 7 * mm
+    centro("DEBE A:", sep=7 * mm)
+    if negocio.representante:
+        centro(negocio.representante)
+    centro(f"({(negocio.nombre or '').upper()})", "Times-Bold", 12)
+    if negocio.nit:
+        centro(f"NIT: {negocio.nit}", "Times-Bold", 12)
+    y -= 9 * mm
+
+    def campo(rotulo, valor):
+        nonlocal y
+        c.setFont("Times-Bold", 12)
+        c.setFillColor(HexColor(TINTA))
+        c.drawString(x0, y, rotulo)
+        ancho_r = pdfmetrics.stringWidth(rotulo, "Times-Bold", 12) + 2 * mm
+        c.setFont("Times-Italic", 12)
+        lineas = textwrap.wrap(valor, 78)
+        for k, ln in enumerate(lineas or [""]):
+            c.drawString(x0 + (ancho_r if k == 0 else 0), y, ln)
+            y -= 6 * mm
+        y -= 2.5 * mm
+
+    campo("La Suma de:", pesos_en_letras(cc.valor) + ".")
+    campo("Por Concepto de:", cc.concepto.strip() + ("" if cc.concepto.strip().endswith(".") else "."))
+    if cc.detalle:
+        c.setFont("Times-Roman", 11)
+        for ln in _wrap(cc.detalle, 92)[:8]:
+            c.drawString(x0, y, ln)
+            y -= 5.2 * mm
+        y -= 2 * mm
+
+    if cc.ordenes:
+        y -= 2 * mm
+        c.setFont("Times-Bold", 10)
+        c.setFillColor(HexColor(GRIS))
+        c.drawString(x0, y, "DETALLE DE LOS SERVICIOS")
+        y -= 2.5 * mm
+        c.setStrokeColor(HexColor(TINTA))
+        c.line(x0, y, x1, y)
+        y -= 5 * mm
+        for o in cc.ordenes[:14]:
+            c.setFont("Times-Roman", 10.5)
+            c.setFillColor(HexColor(TINTA))
+            eq = ", ".join(e.corto for e in o.equipos[:3]) + ("…" if len(o.equipos) > 3 else "")
+            num = num_orden(o) if num_orden else str(o.id)
+            txt = f"{(o.fecha_fin or o.fecha).strftime('%d/%m/%Y')} · {num} · {o.tipo_txt}" + (f" · {eq}" if eq else "")
+            maxw = (x1 - x0) - pdfmetrics.stringWidth(cop(o.total_factura), "Times-Roman", 10.5) - 6 * mm
+            while len(txt) > 4 and pdfmetrics.stringWidth(txt, "Times-Roman", 10.5) > maxw:
+                txt = txt[:-2].rstrip(" ,·") + "…"
+            c.drawString(x0, y, txt)
+            c.drawRightString(x1, y, cop(o.total_factura))
+            y -= 5.4 * mm
+        if len(cc.ordenes) > 14:
+            c.drawString(x0, y, f"… y {len(cc.ordenes) - 14} servicio(s) más.")
+            y -= 5.4 * mm
+        c.setStrokeColor(HexColor(LINEA))
+        c.line(x0, y + 2.5 * mm, x1, y + 2.5 * mm)
+        y -= 4 * mm
+
+    y = min(y - 6 * mm, 112 * mm)
+    c.setFont("Times-Roman", 12)
+    c.setFillColor(HexColor(TINTA))
+    c.drawString(x0, y, "Cordialmente,")
+    y -= 6 * mm
+    if negocio.firma:
+        try:
+            fi = Image.open(io.BytesIO(negocio.firma))
+            fw = 50 * mm
+            fh = min(fw * fi.height / fi.width, 24 * mm)
+            fw = fh * fi.width / fi.height
+            c.drawImage(ImageReader(fi), x0, y - fh, width=fw, height=fh, mask="auto")
+            y -= fh + 3 * mm
+        except Exception:
+            y -= 16 * mm
+    else:
+        y -= 16 * mm
+    for txt in (negocio.representante or negocio.nombre or "",
+                f"Dirección: {negocio.direccion}" + (f" – {negocio.ciudad}" if negocio.ciudad else "") if negocio.direccion else None,
+                f"Celular: {negocio.telefono}" if negocio.telefono else None,
+                negocio.email or None):
+        if txt:
+            c.drawString(x0, y, txt)
+            y -= 6.2 * mm
+
+    if cc.estado == "pagada" and cc.fecha_pago:
+        c.saveState()
+        c.translate(x1 - 30 * mm, 70 * mm)
+        c.rotate(12)
+        c.setStrokeColor(HexColor("#138A5A"))
+        c.setFillColor(HexColor("#138A5A"))
+        c.setLineWidth(2)
+        c.roundRect(-30 * mm, -9 * mm, 60 * mm, 18 * mm, 3 * mm, stroke=1, fill=0)
+        c.setFont("DVB", 15)
+        c.drawCentredString(0, 1 * mm, "PAGADA")
+        c.setFont("DV", 8.5)
+        c.drawCentredString(0, -5 * mm, cc.fecha_pago.strftime("%d/%m/%Y"))
+        c.restoreState()
+    if cc.estado == "anulada":
+        c.saveState()
+        c.translate(W / 2, H / 2)
+        c.rotate(30)
+        c.setFillColor(HexColor(ROJO))
+        c.setFillAlpha(0.18)
+        c.setFont("DVB", 84)
+        c.drawCentredString(0, 0, "ANULADA")
+        c.restoreState()
+    c.showPage()
+    c.save()
+    return buf.getvalue()

@@ -1,0 +1,33 @@
+{% extends "base.html" %}
+{% block title %}Cuentas de cobro{% endblock %}
+{% block content %}
+<div class="page-head">
+  <div><h1>Cuentas de cobro</h1><p>Documento formal para cobrarle al cliente uno o varios servicios. Se numeran por año (N°01/{{ anio }}).</p></div>
+  <div class="actions">
+    <form class="filters" method="get">
+      <div class="field"><label>Año</label><select class="input" name="anio" onchange="this.form.submit()">{% for a in anios %}<option {{ 'selected' if a == anio }}>{{ a }}</option>{% endfor %}</select></div>
+      <div class="field"><label>Estado</label><select class="input" name="estado" onchange="this.form.submit()"><option value="">Todas</option>
+        {% for k, v in estados.items() %}<option value="{{ k }}" {{ 'selected' if estado == k }}>{{ v[0] }}</option>{% endfor %}</select></div>
+    </form>
+    <a class="btn" href="{{ url_for('cuenta_cobro_form') }}">＋ Nueva cuenta de cobro</a>
+  </div>
+</div>
+<div class="kpis" style="grid-template-columns:repeat(2,minmax(0,1fr))">
+  <div class="kpi"><div class="lbl">Pendientes de pago</div><div class="val {{ 'neg' if pendiente > 0.5 }}">{{ pendiente|cop }}</div><div class="sub">{{ n_pend }} cuenta{{ 's' if n_pend != 1 }} en {{ anio }}</div></div>
+  <div class="kpi"><div class="lbl">Pagadas</div><div class="val pos">{{ pagado|cop }}</div><div class="sub">{{ n_pag }} cuenta{{ 's' if n_pag != 1 }} en {{ anio }}</div></div>
+</div>
+<div class="card"><div class="table-wrap"><table>
+  <thead><tr><th>N.º</th><th>Fecha</th><th>Cliente</th><th>Concepto</th><th class="num">Servicios</th><th class="num">Valor</th><th>Estado</th><th></th></tr></thead>
+  <tbody>
+  {% for c in items %}
+    <tr class="{{ 'anulada' if c.estado == 'anulada' }}">
+      <td><a href="{{ url_for('cuenta_cobro_detalle', id=c.id) }}"><b>{{ c.codigo }}</b></a></td>
+      <td>{{ c.fecha|fecha }}</td><td>{{ c.cliente_nombre }}</td><td>{{ c.concepto }}</td>
+      <td class="num">{{ c.ordenes|length or '—' }}</td><td class="num"><b>{{ c.valor|cop }}</b></td>
+      <td><span class="badge {{ c.estado_info[1] }}">{{ c.estado_info[0] }}</span></td>
+      <td class="r"><a class="btn sec sm" href="{{ url_for('cuenta_cobro_pdf', id=c.id) }}" target="_blank">PDF</a></td>
+    </tr>
+  {% else %}<tr><td colspan="8" class="empty">No hay cuentas de cobro en {{ anio }}. Créalas desde aquí, desde la ficha del cliente o desde una orden terminada.</td></tr>{% endfor %}
+  </tbody>
+</table></div></div>
+{% endblock %}

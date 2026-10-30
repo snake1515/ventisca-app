@@ -275,6 +275,8 @@ class DatosNegocio(EmpresaMixin, db.Model):
     iva_pct = db.Column(db.Float, nullable=False, default=0)
     mensaje = db.Column(db.String(200), default="¡Gracias por confiar en nosotros!")
     condiciones_cot = db.Column(db.String(500))  # texto al pie de las cotizaciones
+    representante = db.Column(db.String(120))  # titular que firma las cuentas de cobro
+    firma = db.Column(db.LargeBinary)  # imagen de la firma (PNG), opcional
 
     logo = db.Column(db.LargeBinary)  # JPG ya redimensionado
     logo_v = db.Column(db.Integer, nullable=False, default=0)
@@ -708,6 +710,49 @@ class CotizacionLinea(EmpresaMixin, db.Model):
     cotizacion = db.relationship("Cotizacion", back_populates="lineas")
     insumo = db.relationship("Insumo", lazy="joined")
     equipo = db.relationship("Equipo", lazy="joined")
+
+
+# ---------------------------------------------------------- cuentas de cobro
+cuenta_ordenes = db.Table(
+    "vt_cuenta_ordenes",
+    db.Column("cuenta_id", db.Integer, db.ForeignKey("vt_cuentas_cobro.id"), primary_key=True),
+    db.Column("orden_id", db.Integer, db.ForeignKey("vt_ordenes.id"), primary_key=True),
+)
+
+ESTADOS_CUENTA = {"pendiente": ("Pendiente", "warn"), "pagada": ("Pagada", "ok"), "anulada": ("Anulada", "err")}
+
+
+class CuentaCobro(EmpresaMixin, db.Model):
+    """Cuenta de cobro al cliente (N.º/año), con las órdenes de servicio que cobra."""
+    __tablename__ = "vt_cuentas_cobro"
+    id = db.Column(db.Integer, primary_key=True)
+    anio = db.Column(db.Integer, nullable=False, index=True)
+    numero = db.Column(db.Integer, nullable=False)  # consecutivo dentro del año
+    fecha = db.Column(db.Date, nullable=False, index=True)
+    cliente_id = db.Column(db.Integer, db.ForeignKey("vt_clientes.id"), index=True)
+    cliente_nombre = db.Column(db.String(160), nullable=False)
+    cliente_nit = db.Column(db.String(40))
+    cliente_direccion = db.Column(db.String(200))
+    valor = db.Column(db.Float, nullable=False, default=0)
+    concepto = db.Column(db.String(500), nullable=False)
+    detalle = db.Column(db.Text)  # texto adicional opcional (periodo, equipos, etc.)
+    estado = db.Column(db.String(12), nullable=False, default="pendiente")
+    fecha_pago = db.Column(db.Date)
+    metodo_pago = db.Column(db.String(30))
+    usuario_id = db.Column(db.Integer, db.ForeignKey("vt_usuarios.id"))
+    creado = db.Column(db.DateTime, default=ahora)
+
+    cliente = db.relationship("Cliente", lazy="joined")
+    usuario = db.relationship("Usuario", lazy="joined")
+    ordenes = db.relationship("Orden", secondary=cuenta_ordenes, lazy="selectin", order_by="Orden.fecha_fin")
+
+    @property
+    def codigo(self):
+        return f"{self.numero:02d}/{self.anio}"
+
+    @property
+    def estado_info(self):
+        return ESTADOS_CUENTA.get(self.estado, (self.estado, "gray"))
 
 
 # -------------------------------------------------- compra-venta de equipos

@@ -12,7 +12,10 @@
           <div style="flex:1;min-width:200px"><input class="input" type="file" name="logo" accept="image/png,image/jpeg,image/webp">
             <div class="hint">JPG o PNG. Sale en el menú, órdenes, cotizaciones y recibos.{% if neg.logo %} <label class="check" style="display:inline-flex;margin:0 0 0 8px;font-weight:600"><input type="checkbox" name="quitar_logo" value="1"> Quitar logo</label>{% endif %}</div></div>
         </div></div>
-      <div class="field"><label>Nombre del negocio</label><input class="input" name="nombre" value="{{ neg.nombre or '' }}" required></div>
+      <div class="form-row">
+        <div class="field"><label>Nombre del negocio</label><input class="input" name="nombre" value="{{ neg.nombre or '' }}" required></div>
+        <div class="field"><label>Titular (quien firma las cuentas de cobro)</label><input class="input" name="representante" value="{{ neg.representante or '' }}" placeholder="Ej: William Alfredo Ospina"></div>
+      </div>
       <div class="form-row">
         <div class="field"><label>NIT o cédula</label><input class="input" name="nit" value="{{ neg.nit or '' }}" placeholder="Opcional"></div>
         <div class="field"><label>Teléfono / WhatsApp</label><input class="input" name="telefono" value="{{ neg.telefono or '' }}" placeholder="Opcional"></div>
@@ -32,6 +35,12 @@
         <div class="field"><label>IVA por defecto (%)</label><input class="input" type="number" step="any" min="0" max="100" name="iva_pct" value="{{ '%g'|format(neg.iva_pct or 0) }}"><div class="hint">0 si no eres responsable de IVA</div></div>
       </div>
       <div class="note" style="margin-bottom:14px">Estos documentos son soporte del servicio para el cliente; <b>no reemplazan la factura electrónica DIAN</b> cuando estés obligado a expedirla.</div>
+      <div class="field"><label>Firma para las cuentas de cobro (opcional)</label>
+        <div style="display:flex;gap:14px;align-items:center;flex-wrap:wrap">
+          {% if neg.firma %}<img src="{{ url_for('firma_img') }}?v={{ range(100000)|random }}" alt="Firma" style="height:56px;max-width:200px;object-fit:contain;border:1px solid var(--line);border-radius:8px;background:#fff;padding:4px">{% endif %}
+          <div style="flex:1;min-width:200px"><input class="input" type="file" name="firma" accept="image/png,image/jpeg,image/webp">
+            <div class="hint">Foto o escaneo de la firma sobre papel blanco; el fondo se quita solo.{% if neg.firma %} <label class="check" style="display:inline-flex;margin:0 0 0 8px;font-weight:600"><input type="checkbox" name="quitar_firma" value="1"> Quitar firma</label>{% endif %}</div></div>
+        </div></div>
       <div class="field"><label>Mensaje al pie</label><input class="input" name="mensaje" value="{{ neg.mensaje or '' }}" placeholder="Ej: ¡Gracias por confiar en nosotros!"></div>
       <div class="field"><label>Condiciones de las cotizaciones</label><textarea class="input" name="condiciones_cot" rows="3" placeholder="Ej: Forma de pago: 50% para iniciar y 50% al terminar. Garantía de 30 días sobre la mano de obra.">{{ neg.condiciones_cot or '' }}</textarea></div>
       <button class="btn">Guardar</button>

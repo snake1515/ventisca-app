@@ -8,6 +8,7 @@
     {% if c.whatsapp %}<a class="btn wa" href="{{ c.whatsapp }}" target="_blank" rel="noopener">WhatsApp</a>{% endif %}
     <a class="btn" href="{{ url_for('orden_nueva', cliente=c.id) }}">＋ Orden de servicio</a>
     <a class="btn sec" href="{{ url_for('cotizacion_form', cliente=c.id) }}">Cotizar</a>
+    <a class="btn sec" href="{{ url_for('cuenta_cobro_form', cliente=c.id) }}">Cuenta de cobro</a>
     <a class="btn sec" href="{{ url_for('cliente_form', id=c.id) }}">Editar</a>
   </div>
 </div>
